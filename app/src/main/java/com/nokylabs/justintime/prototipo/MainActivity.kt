@@ -54,6 +54,13 @@ class MainActivity : Activity() {
     private var corEscolhida = 0
     private var repeticaoEscolhida = Repeticao()
 
+    // Edição
+    private var editandoId: Int? = null
+    private lateinit var tituloFormulario: TextView
+    private lateinit var botaoSalvar: Button
+    private lateinit var botaoCancelarEdicao: Button
+    private lateinit var rolagem: ScrollView
+
     /** Data e hora escolhidas para o prazo. Começa na próxima hora cheia. */
     private val prazoEscolhido: Calendar = Calendar.getInstance().apply {
         add(Calendar.HOUR_OF_DAY, 1)
@@ -116,7 +123,8 @@ class MainActivity : Activity() {
             setPadding(px(18), px(8), px(18), px(32))
         }
 
-        col.addView(titulo("1. Nova tarefa"))
+        tituloFormulario = titulo("1. Nova tarefa")
+        col.addView(tituloFormulario)
         val linhaNome = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         campoEmoji = EditText(this).apply {
             hint = "🙂"; textSize = 22f; gravity = Gravity.CENTER
@@ -142,11 +150,14 @@ class MainActivity : Activity() {
         botaoRepetir = botao("") { escolherRepeticao() }
         col.addView(botaoRepetir)
         atualizarBotoesPrazo()
-        col.addView(botao("Agendar tarefa") { agendarEscolhida() }.apply {
+        botaoSalvar = botao("Agendar tarefa") { salvarFormulario() }.apply {
             setTextColor(Color.WHITE); textSize = 16f
             background = GradientDrawable().apply { cornerRadius = px(12).toFloat(); setColor(Color.parseColor("#5E35B1")) }
             layoutParams = LinearLayout.LayoutParams(-1, px(52)).apply { topMargin = px(14) }
-        })
+        }
+        col.addView(botaoSalvar)
+        botaoCancelarEdicao = botao("Cancelar edição") { limparFormulario() }.apply { visibility = android.view.View.GONE }
+        col.addView(botaoCancelarEdicao)
 
         col.addView(titulo("2. Tarefas"))
         caixaTarefas = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -213,7 +224,8 @@ class MainActivity : Activity() {
         }
         col.addView(textoLog)
 
-        setContentView(ScrollView(this).apply { addView(col) })
+        rolagem = ScrollView(this).apply { addView(col) }
+        setContentView(rolagem)
     }
 
     // ---------------- Data e hora do prazo ----------------
@@ -372,18 +384,116 @@ class MainActivity : Activity() {
 
     private fun nomeOuPadrao(padrao: String) = campoNome.text.toString().trim().ifEmpty { padrao }
 
-    private fun agendarEscolhida() {
+    /** Cria ou salva a edição. Antes, confere se já existe tarefa com o mesmo nome ou horário. */
+    private fun salvarFormulario(ignorarConflitos: Boolean = false) {
         val nome = campoNome.text.toString().trim()
         if (nome.isEmpty()) { toast("Dê um nome para a tarefa"); return }
         val agora = System.currentTimeMillis()
+        val original = editandoId?.let { Store.get(this, it) }
+        if (editandoId != null && original == null) { toast("Essa tarefa não existe mais"); limparFormulario(); return }
+
         val prazo = if (repeticaoEscolhida.tipo == Repeticao.Tipo.SEMANAL)
             repeticaoEscolhida.proximaApos(0, agora) ?: run { toast("Adicione pelo menos um horário"); return }
         else prazoEscolhido.timeInMillis
-        if (prazo <= agora) { toast("Esse horário já passou. Escolha outro."); return }
-        criarTarefa(nome, prazo, primeiroEmoji(campoEmoji.text.toString()), corEscolhida, repeticaoEscolhida)
+        // Ao editar só o nome/cor/emoji de uma tarefa vencida, o prazo antigo pode continuar
+        val prazoMudou = original == null || prazo != original.prazo
+        if (prazoMudou && prazo <= agora) { toast("Esse horário já passou. Escolha outro."); return }
+
+        if (!ignorarConflitos) {
+            val conflitos = procurarConflitos(nome, prazo, ignorarId = editandoId)
+            if (conflitos.isNotEmpty()) { perguntarSobreConflitos(conflitos) { salvarFormulario(ignorarConflitos = true) }; return }
+        }
+
+        val emoji = primeiroEmoji(campoEmoji.text.toString())
+        if (original == null) criarTarefa(nome, prazo, emoji, corEscolhida, repeticaoEscolhida)
+        else aplicarEdicao(original, nome, prazo, prazoMudou, emoji)
+        limparFormulario()
+    }
+
+    // ---------------- Conflitos ----------------
+
+    private class Conflito(val motivo: String, val tarefa: Tarefa)
+
+    private fun normalizar(s: String) = s.trim().lowercase().replace(Regex("\\s+"), " ")
+
+    /** Tarefas abertas com o mesmo nome (sem diferenciar maiúsculas) ou no mesmo minuto. */
+    private fun procurarConflitos(nome: String, prazo: Long, ignorarId: Int?): List<Conflito> {
+        val alvo = normalizar(nome)
+        val minuto = prazo / 60_000
+        return Store.tarefas(this).filter { it.aberta && it.id != ignorarId }.mapNotNull { t ->
+            val mesmoNome = normalizar(t.titulo) == alvo
+            val mesmoHorario = t.prazo / 60_000 == minuto
+            when {
+                mesmoNome && mesmoHorario -> Conflito("mesmo nome e mesmo horário", t)
+                mesmoNome -> Conflito("mesmo nome", t)
+                mesmoHorario -> Conflito("mesmo horário", t)
+                else -> null
+            }
+        }
+    }
+
+    private fun perguntarSobreConflitos(conflitos: List<Conflito>, seguir: () -> Unit) {
+        val lista = conflitos.joinToString("\n") { "• ${it.tarefa.rotulo}\n   ${it.motivo} · ${Store.amigavel(it.tarefa.prazo)}" }
+        val criando = editandoId == null
+        val b = AlertDialog.Builder(this)
+            .setTitle("Já existe algo parecido")
+            .setMessage("Encontrei ${if (conflitos.size == 1) "esta tarefa" else "estas tarefas"}:\n\n$lista\n\n" +
+                if (criando) "Quer criar mesmo assim?" else "Quer salvar mesmo assim?")
+            .setPositiveButton(if (criando) "Criar mesmo assim" else "Salvar mesmo assim") { _, _ -> seguir() }
+            .setNegativeButton("Voltar e ajustar", null)
+        // Atalho: se for uma tarefa só e eu estiver criando, oferece editar a que já existe
+        val unica = conflitos.singleOrNull()?.tarefa
+        if (criando && unica != null) b.setNeutralButton("Editar a existente") { _, _ -> carregarParaEdicao(unica) }
+        b.show()
+    }
+
+    // ---------------- Edição ----------------
+
+    private fun carregarParaEdicao(t: Tarefa) {
+        editandoId = t.id
+        campoNome.setText(t.titulo)
+        campoEmoji.setText(t.emoji)
+        corEscolhida = t.cor; desenharCores()
+        repeticaoEscolhida = t.regra
+        prazoEscolhido.timeInMillis = t.prazo
+        atualizarBotoesPrazo()
+        tituloFormulario.text = "1. Editando tarefa"
+        botaoSalvar.text = "Salvar alterações"
+        botaoCancelarEdicao.visibility = android.view.View.VISIBLE
+        rolagem.smoothScrollTo(0, 0)
+        campoNome.requestFocus()
+    }
+
+    private fun limparFormulario() {
+        editandoId = null
         campoNome.setText(""); campoEmoji.setText("")
         corEscolhida = 0; desenharCores()
-        repeticaoEscolhida = Repeticao(); atualizarBotoesPrazo()
+        repeticaoEscolhida = Repeticao()
+        prazoEscolhido.timeInMillis = System.currentTimeMillis()
+        prazoEscolhido.add(Calendar.HOUR_OF_DAY, 1)
+        prazoEscolhido.set(Calendar.MINUTE, 0); prazoEscolhido.set(Calendar.SECOND, 0); prazoEscolhido.set(Calendar.MILLISECOND, 0)
+        atualizarBotoesPrazo()
+        tituloFormulario.text = "1. Nova tarefa"
+        botaoSalvar.text = "Agendar tarefa"
+        botaoCancelarEdicao.visibility = android.view.View.GONE
+    }
+
+    private fun aplicarEdicao(t: Tarefa, nome: String, prazo: Long, prazoMudou: Boolean, emoji: String) {
+        Agendador.cancelar(this, t.id)
+        Notificador.cancelar(this, t.id)
+        t.titulo = nome; t.emoji = emoji; t.cor = corEscolhida
+        t.repeticao = repeticaoEscolhida.codificar()
+        if (prazoMudou) {
+            // Novo prazo: a tarefa volta a ficar ativa (mesmo se estava aguardando resposta)
+            t.prazo = prazo; t.prazoOriginal = prazo; t.status = Status.ATIVA; t.disparouEm = 0L
+        }
+        t.ancora = t.prazoOriginal // a repetição passa a contar a partir desta ocorrência
+        Store.salvar(this, t)
+        if (t.status == Status.ATIVA) Agendador.agendarPrazo(this, t)
+        Store.log(this, "✏️ Editada: \"${t.rotulo}\" · ${Store.amigavel(t.prazo)} · ${t.regra.descricao()}")
+        Vitrine.atualizarTudo(this)
+        toast("Alterações salvas")
+        atualizarTarefas(); atualizarLog()
     }
 
     private fun criarTarefa(nome: String, prazo: Long, emoji: String = "", cor: Int = 0, rep: Repeticao = Repeticao()) {
@@ -501,10 +611,12 @@ class MainActivity : Activity() {
                     startActivity(Intent(this, AlarmActivity::class.java).putExtra(Agendador.EXTRA_ID, t.id))
                 })
             }
+            if (t.aberta) linha.addView(botao("Editar") { carregarParaEdicao(t) })
             linha.addView(botao("Excluir") {
                 Agendador.cancelar(this, t.id)
                 Notificador.cancelar(this, t.id)
                 Store.remover(this, t.id)
+                if (editandoId == t.id) limparFormulario()
                 Store.log(this, "Excluída: \"${t.rotulo}\"")
                 if (t.regra.repete && t.status == Status.ATIVA) toast("Repetição encerrada: \"${t.rotulo}\" não volta mais")
                 Vitrine.atualizarTudo(this)

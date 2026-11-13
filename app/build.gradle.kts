@@ -11,8 +11,8 @@ android {
         applicationId = "com.nokylabs.justintime.prototipo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.0.3-prototipo"
+        versionCode = 4
+        versionName = "0.0.4-prototipo"
     }
 
     // Chave de depuração fixa, guardada no projeto: assim qualquer computador gera

@@ -1,5 +1,11 @@
 # Changelog — Just in Time (protótipo)
 
+## 0.0.4 — 13/11/2026
+- **Editar tarefas**: botão "Editar" na lista carrega a tarefa no formulário (nome, emoji, cor,
+  prazo e repetição). Mudar o prazo de uma tarefa que aguardava resposta reabre a tarefa.
+- **Aviso de conflitos**: ao criar ou salvar, o app procura tarefas abertas com o **mesmo nome**
+  ou no **mesmo horário** e pergunta se quer seguir assim, voltar e ajustar ou editar a existente.
+
 ## 0.0.3 — 13/11/2026
 - **Repetições**: todo dia, toda semana, a cada 15 dias, todo mês, todo ano e personalizado
   (a cada N dias/semanas/meses/anos). Também **dias e horários específicos**
