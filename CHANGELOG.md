@@ -1,5 +1,15 @@
 # Changelog — Just in Time
 
+## 0.4.0-alpha.1 — 13/11/2026
+**Contador de entregas** (ideia da Taynara): uma recompensa em números pelo que foi entregue.
+- Cartão no topo da lista: **entregues**, **não entregues** e **pela frente**, com **Hoje** ou
+  **Semana** (segunda a domingo), barra dividida e uma frase de retorno ("Tudo entregue hoje! 🎉").
+- **🔥 Sequência**: dias seguidos com entregas e nenhuma tarefa não entregue (dias sem tarefas não
+  quebram a sequência).
+- "Feita" conta como entregue, mesmo depois de adiar. A conta usa o prazo de cada ocorrência.
+- **Widget**: linha no topo com os mesmos números ("Hoje: ✓ 3  ✗ 1  ·  🔥 5"), no período escolhido no app.
+- 35 testes automáticos (novos: contador, semana e sequência).
+
 ## 0.3.0-alpha.1 — 13/11/2026
 Widget, resumo e bolha, trazidos do protótipo com o visual do NokyLabs.UI.
 - **Widget** ("Just in Time — prazos"): até 3 tarefas, a próxima em destaque e as seguintes recuadas,

@@ -10,6 +10,9 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
@@ -126,6 +129,32 @@ class Tarefas(
         val porId = tarefas.associateBy { it.id }
         return ocorrencias.mapNotNull { o -> porId[o.tarefa_id]?.let { Item(it.paraDominio(), o.paraDominio()) } }
     }
+
+    // ---------------- Contador de entregas ----------------
+
+    /** O placar do período que contém hoje. */
+    fun placar(periodo: Periodo): Placar {
+        val hoje = agoraLocal().date
+        val (inicio, fim) = periodo.intervalo(hoje)
+        val respondidas = qo.respondidasEntre(inicio.comeco().toString(), fim.comeco().toString()).executeAsList()
+        val abertas = qo.abertasEntre(inicio.comeco().toString(), fim.comeco().toString()).executeAsList()
+        // Para a sequência: o último ano de respostas, agrupado por dia
+        val umAnoAtras = hoje.minus(400, DateTimeUnit.DAY)
+        val porDia = qo.respondidasEntre(umAnoAtras.comeco().toString(), hoje.plus(1, DateTimeUnit.DAY).comeco().toString())
+            .executeAsList()
+            .groupBy({ LocalDateTime.parse(it.prazo).date }, { Status.valueOf(it.status) })
+        return Placar(
+            periodo, inicio, fim,
+            entregues = respondidas.count { it.status == Status.FEITA.name },
+            naoEntregues = respondidas.count { it.status == Status.NAO_FEITA.name },
+            pelaFrente = abertas.size,
+            sequencia = calcularSequencia(hoje, porDia),
+        )
+    }
+
+    /** Período escolhido na tela (Hoje/Semana), guardado para o widget usar o mesmo. */
+    fun periodoDoPlacar(): Periodo = preferencia("placar.periodo")?.let { runCatching { Periodo.valueOf(it) }.getOrNull() } ?: Periodo.DIA
+    fun escolherPeriodo(p: Periodo) { gravarPreferencia("placar.periodo", p.name); agendador.vitrineMudou() }
 
     // ---------------- Conflitos ----------------
 

@@ -125,6 +125,14 @@ object Vitrine {
         rv.setOnClickPendingIntent(R.id.botaoMais, abrirApp(c, novaTarefa = true))
         rv.setViewVisibility(R.id.vazio, if (itens.isEmpty()) View.VISIBLE else View.GONE)
         preencher(c, rv, LINHAS_WIDGET, itens, agora, fundoEscuro = true)
+        // Contador de entregas (o mesmo período escolhido no app)
+        val placar = c.tarefas.placar(c.tarefas.periodoDoPlacar())
+        if (placar.total > 0 || placar.sequencia > 0) {
+            val partes = mutableListOf("${placar.periodo.rotulo}: ✓ ${placar.entregues}  ✗ ${placar.naoEntregues}")
+            if (placar.sequencia > 0) partes += "🔥 ${placar.sequencia}"
+            rv.setTextViewText(R.id.placar, partes.joinToString("  ·  "))
+            rv.setViewVisibility(R.id.placar, View.VISIBLE)
+        } else rv.setViewVisibility(R.id.placar, View.GONE)
         mgr.updateAppWidget(ids, rv)
     }
 

@@ -10,15 +10,16 @@ Android primeiro; Windows e Linux depois, com o mesmo código de regras e telas 
 
 ## Status
 
-**0.3.0-alpha.1**
+**0.4.0-alpha.1**
 - Tarefas com emoji, cor, prazo com horário exato ou de dia inteiro, e repetições: todo dia, toda semana, a cada 15 dias, todo mês, todo ano, a cada N, ou dias e horários específicos.
 - A próxima tarefa aparece em destaque, com contagem regressiva.
 - Responder na lista ou na tela de alarme. Histórico. Aviso quando já existe uma tarefa com o mesmo nome ou horário.
 - Alarme exato com tela de alarme (no bloqueio e com o celular em uso), som que silencia em 60 s, avisos antes do prazo, horário silencioso, resumo do dia.
 - Configurações com as permissões e relatório de bugs.
 - Widget com contagem regressiva, resumo nas notificações e bolha flutuante redimensionável.
+- Contador de entregas (entregues × não entregues, hoje ou na semana) com 🔥 sequência de dias, no app e no widget.
 
-**Próxima etapa:** o contador de entregas (entregues × não entregues no dia ou na semana). Veja o [ROADMAP](ROADMAP.md).
+Próximos passos no [ROADMAP](ROADMAP.md).
 
 ## Como compilar
 

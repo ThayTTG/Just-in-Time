@@ -23,6 +23,15 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/placar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
+            android:textColor="#C9C1DB"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/botaoMais"
             android:layout_width="32dp"
             android:layout_height="32dp"

@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,6 +85,9 @@ fun TelaLista(
     var aba by remember { mutableIntStateOf(0) }
     val abertas by remember { tarefas.abertas() }.collectAsState(tarefas.abertasAgora())
     val historico by remember { tarefas.historico() }.collectAsState(emptyList())
+    var periodo by remember { mutableStateOf(tarefas.periodoDoPlacar()) }
+    // Recalcula quando as tarefas mudam, o período muda ou o dia vira
+    val placar = remember(abertas, historico, periodo, agora.date) { tarefas.placar(periodo) }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -106,6 +110,9 @@ fun TelaLista(
                 }
             }
             if (avisoDaVersao != null) item { NokyNotice(avisoDaVersao, modifier = Modifier.fillMaxWidth()) }
+            if (aba == 0) item {
+                CartaoPlacar(placar, { periodo = it; tarefas.escolherPeriodo(it) }, Modifier.nokyEntrance(0))
+            }
             if (permissoesFaltando > 0) item {
                 NokyCard(Modifier.fillMaxWidth(), onClick = aoConfigurar) {
                     Text("⚠️ Falta${if (permissoesFaltando > 1) "m" else ""} $permissoesFaltando permiss${if (permissoesFaltando > 1) "ões" else "ão"}", style = t.h3)

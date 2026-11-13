@@ -45,7 +45,11 @@ fun exemplos(): Pair<Tarefas, RelogioParado> {
     val banco = t.criar(DadosTarefa("Ligar para o banco", "📞", prazo = LocalDateTime.parse("2026-11-13T09:30")))
     relogio.local = LocalDateTime.parse("2026-11-13T09:30")
     t.prazoChegou(banco.ocorrencia.id)
+    val feita1 = t.criar(DadosTarefa("Café com a equipe", "☕", prazo = LocalDateTime.parse("2026-11-13T09:40")))
+    val feita2 = t.criar(DadosTarefa("Corrigir provas", "📝", prazo = LocalDateTime.parse("2026-11-13T09:45")))
     relogio.local = LocalDateTime.parse("2026-11-13T10:00:00")
+    t.responder(feita1.ocorrencia.id, feita = true)
+    t.responder(feita2.ocorrencia.id, feita = true)
     t.criar(DadosTarefa("Entregar notas do 2º bimestre", "📚", prazo = LocalDateTime.parse("2026-11-13T12:41:07")))
     t.criar(DadosTarefa("Remédio", "💊", cor = 0xFF43C59E.toInt(), prazo = LocalDateTime.parse("2026-11-13T20:00"),
         repeticao = Repeticao.Intervalo(1, Repeticao.Unidade.DIA)))

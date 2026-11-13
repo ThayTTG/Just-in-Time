@@ -33,6 +33,16 @@ WHERE status IN ('FEITA', 'NAO_FEITA')
 ORDER BY prazo DESC
 LIMIT ?;
 
+-- Respondidas com prazo entre duas datas (texto ISO compara na ordem certa)
+respondidasEntre:
+SELECT * FROM ocorrencia
+WHERE status IN ('FEITA', 'NAO_FEITA') AND prazo >= ? AND prazo < ?;
+
+-- Abertas com prazo entre duas datas
+abertasEntre:
+SELECT * FROM ocorrencia
+WHERE status IN ('ATIVA', 'AGUARDANDO') AND prazo >= ? AND prazo < ?;
+
 daTarefa:
 SELECT * FROM ocorrencia WHERE tarefa_id = ? ORDER BY prazo;
 
