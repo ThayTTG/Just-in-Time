@@ -135,4 +135,55 @@ class TarefasTest {
         assertTrue(tarefas.abertasAgora().isEmpty())
         assertTrue(agendador.agendados.isEmpty())
     }
+
+    @Test fun finalizar_antes_mantem_a_repeticao() {
+        val item = tarefas.criar(DadosTarefa("Regar plantas", prazo = t("2026-11-13T18:00"),
+            repeticao = Repeticao.Intervalo(1, Repeticao.Unidade.DIA)))
+        tarefas.finalizar(item.ocorrencia.id)
+        assertEquals(Status.FEITA, tarefas.item(item.ocorrencia.id)!!.status)
+        val abertas = tarefas.abertasAgora()
+        assertEquals(listOf(t("2026-11-14T18:00")), abertas.map { it.prazo })
+        assertEquals(setOf(abertas[0].ocorrencia.id), agendador.agendados.keys)
+        // o alarme antigo, se tocasse mesmo assim, não faz nada
+        relogio.local = t("2026-11-13T18:00")
+        assertNull(tarefas.prazoChegou(item.ocorrencia.id))
+        assertEquals(1, tarefas.abertasAgora().size)
+    }
+
+    @Test fun finalizar_sem_repeticao_so_fecha() {
+        val item = tarefas.criar(DadosTarefa("Enviar e-mail", prazo = t("2026-11-13T18:00")))
+        tarefas.finalizar(item.ocorrencia.id)
+        assertTrue(tarefas.abertasAgora().isEmpty())
+        assertTrue(agendador.agendados.isEmpty())
+    }
+
+    @Test fun ajustar_para_antes_e_depois() {
+        val item = tarefas.criar(DadosTarefa("Prova", prazo = t("2026-11-14T18:00")))
+        val id = item.ocorrencia.id
+        tarefas.ajustar(id, t("2026-11-14T09:00")) // antes: não é adiamento
+        assertEquals(t("2026-11-14T09:00"), tarefas.item(id)!!.prazo)
+        assertEquals(0, tarefas.item(id)!!.ocorrencia.adiamentos)
+        assertEquals(tarefas.instante(t("2026-11-14T09:00")), agendador.agendados[id])
+        tarefas.ajustar(id, t("2026-11-15T10:00")) // depois: conta
+        assertEquals(1, tarefas.item(id)!!.ocorrencia.adiamentos)
+        assertEquals(t("2026-11-15T10:00"), tarefas.abertasAgora().single().prazo)
+    }
+
+    @Test fun ajustar_recusa_horario_que_ja_passou() {
+        val item = tarefas.criar(DadosTarefa("Prova", prazo = t("2026-11-14T18:00")))
+        assertFailsWith<RegraViolada> { tarefas.ajustar(item.ocorrencia.id, t("2026-11-13T09:59")) }
+        assertFailsWith<RegraViolada> { tarefas.ajustar(item.ocorrencia.id, t("2026-11-13T10:00")) }
+        assertEquals(t("2026-11-14T18:00"), tarefas.item(item.ocorrencia.id)!!.prazo)
+        assertEquals("Esse horário já passou. Escolha outro.", tarefas.problemaNoPrazo(t("2026-11-12T23:00")))
+        assertNull(tarefas.problemaNoPrazo(t("2026-11-13T10:01")))
+    }
+
+    @Test fun ajustar_nao_mexe_na_serie() {
+        val item = tarefas.criar(DadosTarefa("Academia", prazo = t("2026-11-13T18:00"),
+            repeticao = Repeticao.Intervalo(1, Repeticao.Unidade.DIA)))
+        tarefas.ajustar(item.ocorrencia.id, t("2026-11-13T12:00"))
+        relogio.local = t("2026-11-13T12:00")
+        tarefas.prazoChegou(item.ocorrencia.id)
+        assertEquals(t("2026-11-14T18:00"), tarefas.abertasAgora().last().prazo)
+    }
 }

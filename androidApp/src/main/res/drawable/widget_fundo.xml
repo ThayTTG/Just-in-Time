@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Superfície do NokyLabs.UI (tema escuro), levemente translúcida -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#F01C1729" />
+    <stroke android:width="1dp" android:color="#342B4B" />
+    <corners android:radius="22dp" />
+</shape>

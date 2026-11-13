@@ -24,13 +24,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -53,6 +48,7 @@ import com.nokylabs.justintime.dominio.Repeticao.Unidade
 import com.nokylabs.justintime.dominio.Tarefas
 import com.nokylabs.justintime.dominio.TipoPrazo
 import com.nokylabs.justintime.dominio.formatado
+import com.nokylabs.justintime.dominio.minutosPorExtenso
 import com.nokylabs.ui.NokyButton
 import com.nokylabs.ui.NokyButtonKind
 import com.nokylabs.ui.NokyCard
@@ -81,6 +77,9 @@ object Paleta {
     )
     val EMOJIS = listOf("📚", "💼", "🏠", "🎂", "💊", "🏋️", "🛒", "🎮", "📞", "✈️", "🧹", "💡", "🎓", "❤️", "🐾", "💰")
 }
+
+/** Atalhos de aviso antes do prazo, em minutos (dá para adicionar outros valores). */
+private val AVISOS_PRONTOS = listOf(1440, 60, 15)
 
 /** Atalhos de repetição (os mais usados). */
 private val PRESETS = listOf(
@@ -114,8 +113,7 @@ fun TelaEditor(
     var tocarNoSilencio by remember(tarefaId) { mutableStateOf(original?.tarefa?.tocarNoSilencio ?: false) }
     var erro by remember { mutableStateOf<String?>(null) }
     var conflitos by remember { mutableStateOf<List<Conflito>>(emptyList()) }
-    var escolhendoData by remember { mutableStateOf(false) }
-    var escolhendoHora by remember { mutableStateOf(false) }
+    var escolhendoAviso by remember { mutableStateOf(false) }
     var confirmandoExclusao by remember { mutableStateOf(false) }
     var novoHorarioDia by remember { mutableStateOf<DayOfWeek?>(null) }
     val agora = tarefas.agoraLocal()
@@ -149,12 +147,11 @@ fun TelaEditor(
         }
 
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).imePadding(),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).imePadding(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Nome + emoji
-            Column {
-                NokySectionLabel("O que precisa ser feito?")
+            Secao("O que precisa ser feito?") {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     CampoEmoji(emoji) { emoji = it }
                     NokyTextField(titulo, { titulo = it }, Modifier.weight(1f), placeholder = "Ex.: Entregar as notas")
@@ -168,8 +165,7 @@ fun TelaEditor(
             }
 
             // Cor
-            Column {
-                NokySectionLabel("Cor (opcional)")
+            Secao("Cor (opcional)") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     BolinhaCor(0, cor == 0) { cor = 0 }
                     Paleta.CORES.forEach { valor -> BolinhaCor(valor, cor == valor) { cor = valor } }
@@ -177,27 +173,26 @@ fun TelaEditor(
             }
 
             // Prazo
-            Column {
-                NokySectionLabel("Prazo de entrega")
+            Secao("Prazo de entrega") {
                 if (porHorarios) {
                     NokyNotice("O prazo segue os dias e horários da repetição: a primeira vez será ${repeticao.proximaApos(agora, agora)?.let { Formatos.prazo(it, agora) } ?: "—"}.")
                 } else {
                     NokySegmented(listOf("Horário exato", "Dia inteiro"), if (tipo == TipoPrazo.EXATO) 0 else 1,
                         { tipo = if (it == 0) TipoPrazo.EXATO else TipoPrazo.DIA_INTEIRO })
                     Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        NokyButton("📅  " + Formatos.data(prazo.date) + if (prazo.year != agora.year) "/${prazo.year}" else "",
-                            { escolhendoData = true }, kind = NokyButtonKind.Secondary)
-                        if (tipo == TipoPrazo.EXATO)
-                            NokyButton("🕒  " + prazo.time.formatado(), { escolhendoHora = true }, kind = NokyButtonKind.Secondary)
-                        else Text("até 23:59", style = t.secondary, modifier = Modifier.align(Alignment.CenterVertically))
+                    SeletorPrazo(prazo, tipo == TipoPrazo.DIA_INTEIRO, agora) { prazo = it; erro = null }
+                    // Avisa na hora (antes de salvar) se o horário escolhido já passou
+                    val efetivo = dados().prazoEfetivo
+                    val mudou = original == null || efetivo != original.prazo
+                    if (mudou) tarefas.problemaNoPrazo(efetivo)?.let {
+                        Spacer(Modifier.height(10.dp))
+                        NokyNotice(it, NokyNoticeKind.Danger, Modifier.fillMaxWidth())
                     }
                 }
             }
 
             // Repetição
-            Column {
-                NokySectionLabel("Repetição")
+            Secao("Repetição") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     PRESETS.forEach { (nome, r) -> NokyChip(nome, repeticao == r, { repeticao = r }) }
                     NokyChip("Personalizado", repeticao is Repeticao.Intervalo && PRESETS.none { it.second == repeticao },
@@ -222,15 +217,28 @@ fun TelaEditor(
                 }
             }
 
-            // Avisos e silêncio
-            Column {
-                NokySectionLabel("Avisar antes")
+            // Avisos antes do prazo
+            Secao("Avisar antes") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(1440 to "1 dia", 60 to "1 h", 15 to "15 min").forEach { (min, nome) ->
-                        NokyChip(nome, min in avisos, { avisos = if (min in avisos) avisos - min else avisos + min })
+                    // Atalhos + os valores personalizados já escolhidos, do maior para o menor
+                    (AVISOS_PRONTOS + avisos).distinct().sortedDescending().forEach { min ->
+                        NokyChip(minutosPorExtenso(min), min in avisos, {
+                            avisos = if (min in avisos) avisos - min else avisos + min
+                        })
                     }
+                    NokyChip("+ Outro", false, { escolhendoAviso = true })
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (tipo == TipoPrazo.DIA_INTEIRO && !porHorarios) "Em tarefas de dia inteiro os avisos não tocam: o lembrete é o resumo do dia."
+                    else if (avisos.isEmpty()) "Nenhum aviso: só o alarme na hora do prazo."
+                    else "Avisos: " + avisos.sortedDescending().joinToString(", ") { minutosPorExtenso(it) } + " antes.",
+                    style = t.muted,
+                )
+            }
+
+            // Silêncio
+            Secao("Horário silencioso") {
                 NokyChip("🔔 Tocar mesmo no horário silencioso", tocarNoSilencio, { tocarNoSilencio = !tocarNoSilencio })
             }
 
@@ -289,46 +297,14 @@ fun TelaEditor(
         )
     }
 
-    if (escolhendoData) {
-        val estado = rememberDatePickerState(
-            initialSelectedDateMillis = prazo.date.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds(),
-        )
-        DatePickerDialog(
-            onDismissRequest = { escolhendoData = false },
-            confirmButton = {
-                NokyButton("OK", {
-                    estado.selectedDateMillis?.let { ms ->
-                        val d = Instant.fromEpochMilliseconds(ms).toLocalDateTime(TimeZone.UTC).date
-                        prazo = LocalDateTime(d, prazo.time)
-                    }
-                    escolhendoData = false
-                })
-            },
-            dismissButton = { NokyButton("Cancelar", { escolhendoData = false }, kind = NokyButtonKind.Ghost) },
-        ) { DatePicker(estado) }
+    novoHorarioDia?.let { dia ->
+        DialogoRelogio(LocalTime(9, 0), "${Repeticao.diaLongo(dia)}: que horas?", aoEscolher = { hora ->
+            val r = repeticao
+            if (r is Repeticao.Semanal) repeticao = r.comHorario(Horario(dia, hora))
+        }, aoFechar = { novoHorarioDia = null })
     }
 
-    if (escolhendoHora || novoHorarioDia != null) {
-        val inicial = if (novoHorarioDia != null) LocalTime(9, 0) else prazo.time
-        val estado = rememberTimePickerState(inicial.hour, inicial.minute, is24Hour = true)
-        AlertDialog(
-            onDismissRequest = { escolhendoHora = false; novoHorarioDia = null },
-            containerColor = c.surface,
-            title = { Text(novoHorarioDia?.let { "${Repeticao.diaLongo(it)}: que horas?" } ?: "Que horas?", style = t.h2) },
-            text = { TimePicker(estado) },
-            confirmButton = {
-                NokyButton("OK", {
-                    val hora = LocalTime(estado.hour, estado.minute)
-                    val dia = novoHorarioDia
-                    val r = repeticao
-                    if (dia != null && r is Repeticao.Semanal) repeticao = r.comHorario(Horario(dia, hora))
-                    else prazo = LocalDateTime(prazo.date, hora)
-                    escolhendoHora = false; novoHorarioDia = null
-                })
-            },
-            dismissButton = { NokyButton("Cancelar", { escolhendoHora = false; novoHorarioDia = null }, kind = NokyButtonKind.Ghost) },
-        )
-    }
+    if (escolhendoAviso) DialogoAvisoPersonalizado({ avisos = avisos + it }, { escolhendoAviso = false })
 }
 
 private fun Repeticao.Semanal.comHorario(h: Horario) =
@@ -357,6 +333,15 @@ private fun EditorHorarios(r: Repeticao.Semanal, aoMudar: (Repeticao) -> Unit, a
             }
             NokyButton("+ Outro horário", { aoAdicionarNoDia(dia) }, kind = NokyButtonKind.Ghost)
         }
+    }
+}
+
+/** Um bloco do formulário: cartão com o título da seção em cima. */
+@Composable
+private fun Secao(titulo: String, conteudo: @Composable () -> Unit) {
+    NokyCard(Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
+        NokySectionLabel(titulo)
+        conteudo()
     }
 }
 

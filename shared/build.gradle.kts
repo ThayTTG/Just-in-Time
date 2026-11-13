@@ -56,6 +56,9 @@ sqldelight {
     databases {
         create("JitDatabase") {
             packageName.set("com.nokylabs.justintime.dados")
+            srcDirs.setFrom("src/commonMain/sqldelight")
+            // Migrações (1.sqm = da versão 1 para a 2): quem já tem o app instalado não perde nada
+            verifyMigrations.set(false)
         }
     }
 }

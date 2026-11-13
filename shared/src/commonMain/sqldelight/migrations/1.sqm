@@ -1,0 +1,5 @@
+-- Versão 1 → 2 (0.2.0): preferências
+CREATE TABLE preferencia (
+    chave TEXT NOT NULL PRIMARY KEY,
+    valor TEXT NOT NULL
+);

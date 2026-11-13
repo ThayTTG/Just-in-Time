@@ -1,5 +1,6 @@
 package com.nokylabs.justintime
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -45,10 +46,14 @@ fun exemplos(): Pair<Tarefas, RelogioParado> {
     val banco = t.criar(DadosTarefa("Ligar para o banco", "📞", prazo = LocalDateTime.parse("2026-11-13T09:30")))
     relogio.local = LocalDateTime.parse("2026-11-13T09:30")
     t.prazoChegou(banco.ocorrencia.id)
+    val feita1 = t.criar(DadosTarefa("Café com a equipe", "☕", prazo = LocalDateTime.parse("2026-11-13T09:40")))
+    val feita2 = t.criar(DadosTarefa("Corrigir provas", "📝", prazo = LocalDateTime.parse("2026-11-13T09:45")))
     relogio.local = LocalDateTime.parse("2026-11-13T10:00:00")
+    t.responder(feita1.ocorrencia.id, feita = true)
+    t.responder(feita2.ocorrencia.id, feita = true)
     t.criar(DadosTarefa("Entregar notas do 2º bimestre", "📚", prazo = LocalDateTime.parse("2026-11-13T12:41:07")))
     t.criar(DadosTarefa("Remédio", "💊", cor = 0xFF43C59E.toInt(), prazo = LocalDateTime.parse("2026-11-13T20:00"),
-        repeticao = Repeticao.Intervalo(1, Repeticao.Unidade.DIA)))
+        repeticao = Repeticao.Intervalo(1, Repeticao.Unidade.DIA), avisos = listOf(60, 30)))
     t.criar(DadosTarefa("Academia", "🏋️", cor = 0xFF8E5CF7.toInt(), prazo = LocalDateTime.parse("2026-11-14T14:00"),
         repeticao = Repeticao.Semanal(listOf(Horario(DayOfWeek.MONDAY, LocalTime(8, 0)),
             Horario(DayOfWeek.THURSDAY, LocalTime(20, 0)), Horario(DayOfWeek.SATURDAY, LocalTime(14, 0))))))
@@ -57,13 +62,17 @@ fun exemplos(): Pair<Tarefas, RelogioParado> {
     return t to relogio
 }
 
-@OptIn(InternalComposeUiApi::class, ExperimentalComposeUiApi::class)
-private fun capturar(arquivo: File, dark: Boolean, tela: (Tarefas) -> Tela) {
+private fun capturar(arquivo: File, dark: Boolean, altura: Int = 915, tela: (Tarefas) -> Tela) {
     val (tarefas, _) = exemplos()
+    capturarConteudo(arquivo, altura) { JustInTimeApp(tarefas, dark = dark, telaInicial = tela(tarefas), tique = false) }
+}
+
+@OptIn(InternalComposeUiApi::class, ExperimentalComposeUiApi::class)
+private fun capturarConteudo(arquivo: File, altura: Int = 915, conteudo: @androidx.compose.runtime.Composable () -> Unit) {
     val escala = 2f
-    val (l, a) = 412 to 915
+    val (l, a) = 412 to altura
     val cena = ImageComposeScene((l * escala).toInt(), (a * escala).toInt(), Density(escala)) {
-        Box(Modifier.size(l.dp, a.dp)) { JustInTimeApp(tarefas, dark = dark, telaInicial = tela(tarefas), tique = false) }
+        Box(Modifier.size(l.dp, a.dp)) { conteudo() }
     }
     var tempo = 0L
     repeat(15) { cena.render(tempo); tempo += 100_000_000L; Thread.sleep(120) }
@@ -77,8 +86,23 @@ fun main(args: Array<String>) {
     NokyAnim.enabled = false
     capturar(File(pasta, "lista-escuro.png"), true) { Tela.Lista }
     capturar(File(pasta, "lista-claro.png"), false) { Tela.Lista }
-    capturar(File(pasta, "editor-escuro.png"), true) { t ->
-        Tela.Editor(t.abertasAgora().first { it.tarefa.titulo == "Academia" }.tarefa.id)
+    capturar(File(pasta, "editor-escuro.png"), true, altura = 1320) { t ->
+        Tela.Editor(t.abertasAgora().first { it.tarefa.titulo == "Remédio" }.tarefa.id)
+    }
+    capturar(File(pasta, "configuracoes-escuro.png"), true) { Tela.Configuracoes }
+    val (tarefas, _) = exemplos()
+    val pendente = tarefas.abertasAgora().first { it.tarefa.titulo == "Ligar para o banco" }
+    capturarConteudo(File(pasta, "alarme.png")) {
+        com.nokylabs.ui.NokyTheme(accent = com.nokylabs.ui.NokyColors.JustInTime, dark = true) {
+            com.nokylabs.justintime.ui.TelaAlarme(tarefas, pendente, aoTerminar = {})
+        }
+    }
+    val entrega = tarefas.abertasAgora().first { it.tarefa.titulo.startsWith("Entregar") }
+    capturarConteudo(File(pasta, "ajustar.png")) {
+        com.nokylabs.ui.NokyTheme(accent = com.nokylabs.ui.NokyColors.JustInTime, dark = true) {
+            androidx.compose.foundation.layout.Box(Modifier.size(412.dp, 915.dp).background(com.nokylabs.ui.NokyTheme.colors.bg))
+            com.nokylabs.justintime.ui.DialogoAjustar(entrega, tarefas) {}
+        }
     }
     println("Imagens em ${pasta.absolutePath}")
 }

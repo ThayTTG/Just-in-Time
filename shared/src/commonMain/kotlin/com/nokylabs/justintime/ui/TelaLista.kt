@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,6 +42,7 @@ import com.nokylabs.ui.NokyBadgeKind
 import com.nokylabs.ui.NokyButton
 import com.nokylabs.ui.NokyButtonKind
 import com.nokylabs.ui.NokyCard
+import com.nokylabs.ui.NokyIconButton
 import com.nokylabs.ui.NokyIcons
 import com.nokylabs.ui.NokyNotice
 import com.nokylabs.ui.NokySectionLabel
@@ -74,6 +76,8 @@ fun TelaLista(
     avisoDaVersao: String?,
     aoCriar: () -> Unit,
     aoEditar: (tarefaId: String) -> Unit,
+    aoConfigurar: () -> Unit = {},
+    permissoesFaltando: Int = 0,
 ) {
     val c = NokyTheme.colors
     val t = NokyTheme.type
@@ -81,6 +85,10 @@ fun TelaLista(
     var aba by remember { mutableIntStateOf(0) }
     val abertas by remember { tarefas.abertas() }.collectAsState(tarefas.abertasAgora())
     val historico by remember { tarefas.historico() }.collectAsState(emptyList())
+    var periodo by remember { mutableStateOf(tarefas.periodoDoPlacar()) }
+    // Recalcula quando as tarefas mudam, o período muda ou o dia vira
+    val placar = remember(abertas, historico, periodo, agora.date) { tarefas.placar(periodo) }
+    var ajustando by remember { mutableStateOf<Item?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -90,13 +98,28 @@ fun TelaLista(
         ) {
             item {
                 Column(Modifier.padding(bottom = 8.dp)) {
-                    Text("Just in Time", style = t.h1)
-                    Text(Formatos.dataLonga(agora.date).replaceFirstChar { it.uppercase() }, style = t.secondary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Just in Time", style = t.h1)
+                            Text(Formatos.dataLonga(agora.date).replaceFirstChar { it.uppercase() }, style = t.secondary)
+                        }
+                        NokyIconButton(NokyIcons.Settings, "Configurações", aoConfigurar,
+                            tint = if (permissoesFaltando > 0) c.warning else c.textSecondary)
+                    }
                     Spacer(Modifier.height(14.dp))
                     NokySegmented(listOf("Abertas (${abertas.size})", "Histórico"), aba, { aba = it })
                 }
             }
             if (avisoDaVersao != null) item { NokyNotice(avisoDaVersao, modifier = Modifier.fillMaxWidth()) }
+            if (aba == 0) item {
+                CartaoPlacar(placar, { periodo = it; tarefas.escolherPeriodo(it) }, Modifier.nokyEntrance(0))
+            }
+            if (permissoesFaltando > 0) item {
+                NokyCard(Modifier.fillMaxWidth(), onClick = aoConfigurar) {
+                    Text("⚠️ Falta${if (permissoesFaltando > 1) "m" else ""} $permissoesFaltando permiss${if (permissoesFaltando > 1) "ões" else "ão"}", style = t.h3)
+                    Text("Toque aqui para liberar e garantir que os alarmes toquem na hora.", style = t.secondary)
+                }
+            }
 
             if (aba == 0) {
                 if (abertas.isEmpty()) item { Vazio("Nenhuma tarefa aberta", "Toque em \"Nova tarefa\" para começar.") }
@@ -110,13 +133,15 @@ fun TelaLista(
                 }
                 ativas.firstOrNull()?.let { proxima ->
                     item { NokySectionLabel("Próxima", Modifier.padding(top = 6.dp)) }
-                    item(key = proxima.ocorrencia.id) { CartaoProxima(proxima, agora, tarefas, { aoEditar(proxima.tarefa.id) }, Modifier.nokyEntrance(1)) }
+                    item(key = proxima.ocorrencia.id) {
+                        CartaoProxima(proxima, agora, tarefas, { aoEditar(proxima.tarefa.id) }, { ajustando = proxima }, Modifier.nokyEntrance(1))
+                    }
                 }
                 val depois = ativas.drop(1)
                 if (depois.isNotEmpty()) {
                     item { NokySectionLabel("Depois", Modifier.padding(top = 6.dp)) }
                     items(depois, key = { it.ocorrencia.id }) { item ->
-                        LinhaTarefa(item, agora, tarefas, { aoEditar(item.tarefa.id) }, Modifier.nokyEntrance(2).padding(start = 12.dp))
+                        LinhaTarefa(item, agora, tarefas, { aoEditar(item.tarefa.id) }, { ajustando = item }, Modifier.nokyEntrance(2).padding(start = 12.dp))
                     }
                 }
             } else {
@@ -131,6 +156,36 @@ fun TelaLista(
             Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 24.dp),
             icon = NokyIcons.Plus,
         )
+    }
+
+    ajustando?.let { item -> DialogoAjustar(item, tarefas) { ajustando = null } }
+}
+
+/**
+ * "Finalizar" e "Ajustar" de uma tarefa que ainda não venceu. Finalizar pede uma
+ * confirmação rápida ali mesmo, para um toque sem querer não fechar a tarefa.
+ */
+@Composable
+private fun AcoesAntecipadas(item: Item, tarefas: Tarefas, aoAjustar: () -> Unit, modifier: Modifier = Modifier) {
+    var confirmando by remember(item.ocorrencia.id) { mutableStateOf(false) }
+    if (!confirmando) {
+        Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NokyButton("Finalizar", { confirmando = true }, kind = NokyButtonKind.Soft, icon = NokyIcons.Check)
+            NokyButton("Ajustar", aoAjustar, kind = NokyButtonKind.Secondary, icon = NokyIcons.Clock)
+        }
+    } else {
+        Column(modifier) {
+            Text(
+                if (item.tarefa.repeticao.repete) "Marcar esta como entregue? A próxima repetição continua agendada."
+                else "Marcar como entregue antes do prazo?",
+                style = NokyTheme.type.secondary,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NokyButton("Sim, finalizar", { tarefas.finalizar(item.ocorrencia.id) }, kind = NokyButtonKind.Soft, icon = NokyIcons.Check)
+                NokyButton("Voltar", { confirmando = false }, kind = NokyButtonKind.Ghost)
+            }
+        }
     }
 }
 
@@ -150,7 +205,7 @@ private fun Barra(cor: Color, altura: Int) =
 
 /** A próxima tarefa, em destaque: contagem grande na cor do app. */
 @Composable
-private fun CartaoProxima(item: Item, agora: LocalDateTime, tarefas: Tarefas, aoTocar: () -> Unit, modifier: Modifier) {
+private fun CartaoProxima(item: Item, agora: LocalDateTime, tarefas: Tarefas, aoTocar: () -> Unit, aoAjustar: () -> Unit, modifier: Modifier) {
     val t = NokyTheme.type
     val c = NokyTheme.colors
     val seg = Formatos.segundosAte(item.prazo, agora, tarefas)
@@ -175,12 +230,14 @@ private fun CartaoProxima(item: Item, agora: LocalDateTime, tarefas: Tarefas, ao
             )
             if (item.ocorrencia.adiamentos > 0) NokyBadge("adiada ${item.ocorrencia.adiamentos}x", NokyBadgeKind.Neutral)
         }
+        Spacer(Modifier.height(14.dp))
+        AcoesAntecipadas(item, tarefas, aoAjustar)
     }
 }
 
 /** As tarefas seguintes: menores e recuadas (o destaque é da próxima). */
 @Composable
-private fun LinhaTarefa(item: Item, agora: LocalDateTime, tarefas: Tarefas, aoTocar: () -> Unit, modifier: Modifier) {
+private fun LinhaTarefa(item: Item, agora: LocalDateTime, tarefas: Tarefas, aoTocar: () -> Unit, aoAjustar: () -> Unit, modifier: Modifier) {
     val t = NokyTheme.type
     val seg = Formatos.segundosAte(item.prazo, agora, tarefas)
     NokyCard(modifier.fillMaxWidth(), onClick = aoTocar, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
@@ -192,6 +249,8 @@ private fun LinhaTarefa(item: Item, agora: LocalDateTime, tarefas: Tarefas, aoTo
             }
             Text(Formatos.restante(item.prazo, agora, tarefas), style = t.body.merge(t.num).copy(color = NokyTheme.colors.textSecondary))
         }
+        Spacer(Modifier.height(10.dp))
+        AcoesAntecipadas(item, tarefas, aoAjustar, Modifier.padding(start = 17.dp))
     }
 }
 

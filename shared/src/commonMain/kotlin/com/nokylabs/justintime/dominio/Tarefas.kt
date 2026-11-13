@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
@@ -53,6 +57,43 @@ class Tarefas(
 ) {
     private val qt get() = db.tarefaQueries
     private val qo get() = db.ocorrenciaQueries
+    private val qp get() = db.preferenciaQueries
+
+    // ---------------- Preferências ----------------
+
+    fun config(): Config {
+        fun ler(chave: String) = qp.ler(chave).executeAsOneOrNull()
+        fun hora(chave: String, padrao: LocalTime) = ler(chave)?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: padrao
+        val p = Config()
+        return Config(
+            silencioAtivo = ler("silencio.ativo")?.toBoolean() ?: p.silencioAtivo,
+            silencioInicio = hora("silencio.inicio", p.silencioInicio),
+            silencioFim = hora("silencio.fim", p.silencioFim),
+            resumoDoDiaAtivo = ler("resumo.ativo")?.toBoolean() ?: p.resumoDoDiaAtivo,
+            resumoDoDia = hora("resumo.hora", p.resumoDoDia),
+            resumoNaNotificacao = ler("vitrine.resumo")?.toBoolean() ?: p.resumoNaNotificacao,
+            bolhaAtiva = ler("vitrine.bolha")?.toBoolean() ?: p.bolhaAtiva,
+            bolhaTamanho = ler("vitrine.bolha.tamanho")?.toFloatOrNull()?.coerceIn(0.7f, 1.8f) ?: p.bolhaTamanho,
+        )
+    }
+
+    fun salvarConfig(c: Config) {
+        db.transaction {
+            qp.gravar("silencio.ativo", c.silencioAtivo.toString())
+            qp.gravar("silencio.inicio", c.silencioInicio.toString())
+            qp.gravar("silencio.fim", c.silencioFim.toString())
+            qp.gravar("resumo.ativo", c.resumoDoDiaAtivo.toString())
+            qp.gravar("resumo.hora", c.resumoDoDia.toString())
+            qp.gravar("vitrine.resumo", c.resumoNaNotificacao.toString())
+            qp.gravar("vitrine.bolha", c.bolhaAtiva.toString())
+            qp.gravar("vitrine.bolha.tamanho", c.bolhaTamanho.coerceIn(0.7f, 1.8f).toString())
+        }
+        agendador.vitrineMudou() // os lembretes mudam de horário
+    }
+
+    /** Preferência livre de cada plataforma (ex.: tamanho da bolha). */
+    fun preferencia(chave: String): String? = qp.ler(chave).executeAsOneOrNull()
+    fun gravarPreferencia(chave: String, valor: String) = qp.gravar(chave, valor)
 
     fun agoraLocal(): LocalDateTime = relogio.agora().toLocalDateTime(relogio.fuso)
     fun instante(l: LocalDateTime): Instant = l.toInstant(relogio.fuso)
@@ -88,6 +129,32 @@ class Tarefas(
         val porId = tarefas.associateBy { it.id }
         return ocorrencias.mapNotNull { o -> porId[o.tarefa_id]?.let { Item(it.paraDominio(), o.paraDominio()) } }
     }
+
+    // ---------------- Contador de entregas ----------------
+
+    /** O placar do período que contém hoje. */
+    fun placar(periodo: Periodo): Placar {
+        val hoje = agoraLocal().date
+        val (inicio, fim) = periodo.intervalo(hoje)
+        val respondidas = qo.respondidasEntre(inicio.comeco().toString(), fim.comeco().toString()).executeAsList()
+        val abertas = qo.abertasEntre(inicio.comeco().toString(), fim.comeco().toString()).executeAsList()
+        // Para a sequência: o último ano de respostas, agrupado por dia
+        val umAnoAtras = hoje.minus(400, DateTimeUnit.DAY)
+        val porDia = qo.respondidasEntre(umAnoAtras.comeco().toString(), hoje.plus(1, DateTimeUnit.DAY).comeco().toString())
+            .executeAsList()
+            .groupBy({ LocalDateTime.parse(it.prazo).date }, { Status.valueOf(it.status) })
+        return Placar(
+            periodo, inicio, fim,
+            entregues = respondidas.count { it.status == Status.FEITA.name },
+            naoEntregues = respondidas.count { it.status == Status.NAO_FEITA.name },
+            pelaFrente = abertas.size,
+            sequencia = calcularSequencia(hoje, porDia),
+        )
+    }
+
+    /** Período escolhido na tela (Hoje/Semana), guardado para o widget usar o mesmo. */
+    fun periodoDoPlacar(): Periodo = preferencia("placar.periodo")?.let { runCatching { Periodo.valueOf(it) }.getOrNull() } ?: Periodo.DIA
+    fun escolherPeriodo(p: Periodo) { gravarPreferencia("placar.periodo", p.name); agendador.vitrineMudou() }
 
     // ---------------- Conflitos ----------------
 
@@ -162,24 +229,54 @@ class Tarefas(
     }
 
     fun responder(ocorrenciaId: String, feita: Boolean, motivo: Motivo? = null) {
-        val o = qo.porId(ocorrenciaId).executeAsOneOrNull() ?: return
+        val antes = item(ocorrenciaId) ?: return
         val status = if (feita) Status.FEITA else Status.NAO_FEITA
-        qo.responder(status.name, if (feita) null else motivo?.name, relogio.agora().toEpochMilliseconds(), o.id)
-        agendador.cancelar(o.id)
+        qo.responder(status.name, if (feita) null else motivo?.name, relogio.agora().toEpochMilliseconds(), antes.ocorrencia.id)
+        agendador.cancelar(antes.ocorrencia.id)
+        // Finalizada antes do prazo: o alarme não vai tocar, então a próxima da série nasce agora
+        if (antes.status == Status.ATIVA) gerarProxima(antes)
         agendador.vitrineMudou()
     }
 
+    /** Botão "Finalizar": entrega antes do prazo. */
+    fun finalizar(ocorrenciaId: String) = responder(ocorrenciaId, feita = true)
+
+    /**
+     * Botão "Ajustar": muda o prazo só desta vez, para antes ou depois do marcado.
+     * A repetição continua presa ao horário original. Só conta como adiamento se for para depois.
+     */
+    fun ajustar(ocorrenciaId: String, novoPrazo: LocalDateTime) {
+        val atual = item(ocorrenciaId) ?: return
+        validarNovoPrazo(novoPrazo)
+        if (novoPrazo == atual.prazo && atual.status == Status.ATIVA) return
+        qo.ajustar(novoPrazo.toString(), if (novoPrazo > atual.prazo) 1L else 0L, ocorrenciaId)
+        val item = item(ocorrenciaId) ?: return
+        agendador.agendar(item, instante(novoPrazo))
+        agendador.vitrineMudou()
+    }
+
+    /** Null se [novoPrazo] serve; senão, a frase para mostrar na tela. */
+    fun problemaNoPrazo(novoPrazo: LocalDateTime): String? =
+        if (novoPrazo <= agoraLocal()) "Esse horário já passou. Escolha outro." else null
+
+    private fun validarNovoPrazo(novoPrazo: LocalDateTime) {
+        problemaNoPrazo(novoPrazo)?.let { throw RegraViolada(it) }
+    }
+
     fun adiar(ocorrenciaId: String, novoPrazo: LocalDateTime) {
-        if (novoPrazo <= agoraLocal()) throw RegraViolada("Esse horário já passou. Escolha outro.")
+        validarNovoPrazo(novoPrazo)
         qo.adiar(novoPrazo.toString(), ocorrenciaId)
         val item = item(ocorrenciaId) ?: return
         agendador.agendar(item, instante(novoPrazo))
         agendador.vitrineMudou()
     }
 
+    /** Hora local daqui a [segundos]. */
+    fun daquiA(segundos: Long): LocalDateTime =
+        Instant.fromEpochMilliseconds(relogio.agora().toEpochMilliseconds() + segundos * 1000).toLocalDateTime(relogio.fuso)
+
     /** Adia para daqui a [segundos] (botões "+15 min", "+1 h"). */
-    fun adiarEm(ocorrenciaId: String, segundos: Long) =
-        adiar(ocorrenciaId, Instant.fromEpochMilliseconds(relogio.agora().toEpochMilliseconds() + segundos * 1000).toLocalDateTime(relogio.fuso))
+    fun adiarEm(ocorrenciaId: String, segundos: Long) = adiar(ocorrenciaId, daquiA(segundos))
 
     /**
      * O alarme tocou. A ocorrência passa a aguardar resposta e, se a tarefa repete, a próxima

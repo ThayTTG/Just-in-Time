@@ -1,5 +1,64 @@
 # Changelog — Just in Time
 
+## 0.5.0-alpha.1 — 13/11/2026
+- **Finalizar** (entregar antes do prazo): botão em cada tarefa aberta, com uma confirmação rápida ali
+  mesmo. Conta como entregue no contador. Se a tarefa repete, a próxima já fica agendada.
+- **Ajustar**: muda o prazo só desta vez, para mais cedo ou mais tarde. Horário que já passou é recusado
+  (o botão Salvar só libera com um horário válido). Só conta como "adiada" se for para depois; a repetição
+  continua no horário de sempre.
+- **Formulário em blocos**: cada parte da nova tarefa (nome, cor, prazo, repetição, avisos, silêncio)
+  fica no seu próprio cartão. O calendário não deixa escolher dias passados e o aviso de "horário já
+  passou" aparece na hora, antes de salvar.
+- **Aviso antes do prazo personalizado** (ideia da mãe da Taynara): além de 1 dia, 1 h e 15 min, o
+  "+ Outro" aceita qualquer valor em minutos, horas ou dias (ex.: 30 min).
+- **Correção: o aviso antes do prazo não aparecia flutuando.** O canal era de prioridade normal, que
+  não faz pop-up nos Samsung. Agora há um canal próprio, "Avisos antes do prazo", com prioridade alta.
+  O resumo do dia e as pendências seguem num canal discreto.
+- Configurações → Diagnóstico: **Testar aviso (1 min)**.
+- 41 testes automáticos (novos: finalizar, ajustar, validação e texto dos avisos).
+
+## 0.4.0-alpha.1 — 13/11/2026
+**Contador de entregas** (ideia da Taynara): uma recompensa em números pelo que foi entregue.
+- Cartão no topo da lista: **entregues**, **não entregues** e **pela frente**, com **Hoje** ou
+  **Semana** (segunda a domingo), barra dividida e uma frase de retorno ("Tudo entregue hoje! 🎉").
+- **🔥 Sequência**: dias seguidos com entregas e nenhuma tarefa não entregue (dias sem tarefas não
+  quebram a sequência).
+- "Feita" conta como entregue, mesmo depois de adiar. A conta usa o prazo de cada ocorrência.
+- **Widget**: linha no topo com os mesmos números ("Hoje: ✓ 3  ✗ 1  ·  🔥 5"), no período escolhido no app.
+- 35 testes automáticos (novos: contador, semana e sequência).
+
+## 0.3.0-alpha.1 — 13/11/2026
+Widget, resumo e bolha, trazidos do protótipo com o visual do NokyLabs.UI.
+- **Widget** ("Just in Time — prazos"): até 3 tarefas, a próxima em destaque e as seguintes recuadas,
+  contagem regressiva que anda sozinha (sem gastar bateria), barra na cor da tarefa ou da urgência,
+  "Responder" em amarelo quando o prazo chegou. O **+** abre direto o formulário de nova tarefa.
+- **Resumo nas notificações**: fixo e silencioso; recolhido mostra a próxima tarefa, expandido mostra
+  até 2 + "+N tarefas".
+- **Bolha flutuante** com a próxima tarefa: arrastável, toque abre o app (ou a tela de alarme, se o
+  prazo chegou), ✕ esconde até a próxima tarefa mudar, e o tamanho muda com dois dedos, segurando a bolha
+  (A− / A+) ou pelo controle nas Configurações.
+- Widget, resumo e bolha calculam a contagem a partir da mesma base e se atualizam juntos, inclusive
+  24 h e 1 h antes de cada prazo (quando a cor muda).
+- Configurações → "Fora do app": ligar/desligar resumo e bolha, tamanho da bolha, mostrar a bolha de novo.
+- ROADMAP.md com a ideia do **contador de entregas** (dia/semana).
+
+## 0.2.0-alpha.1 — 13/11/2026
+Alarme completo, trazido do protótipo para a base nova.
+- **Tela de alarme** com o NokyLabs.UI: acende o celular bloqueado e, com "aparecer sobre outros apps",
+  abre também com o celular em uso. Feito / Não feito (com motivo) / Adiar (15 min, 1 h, amanhã).
+- **Som de alarme insistente** que para sozinho depois de 60 s (a notificação continua, sem som).
+- **Avisos antes do prazo** funcionando (1 dia, 1 h, 15 min).
+- **Horário silencioso** (padrão 21:00–08:00): alarmes e avisos chegam sem som, menos as tarefas com
+  "tocar mesmo no silêncio". Quando o silêncio acaba, uma notificação lembra o que ficou pendente.
+- **Resumo do dia** (padrão 20:30) com as tarefas de dia inteiro ainda abertas. Tarefas de dia inteiro
+  vencem às 23:59 em silêncio.
+- **Configurações**: permissões (com o porquê de cada uma e o botão Liberar), horário silencioso, resumo
+  do dia, testar alarme em 30 s, reportar bug e créditos. O ícone fica amarelo-âmbar quando falta permissão.
+- **Relatório de bugs**: falhas são registradas; o app avisa ("Ops, algo deu errado") e oferece Reportar
+  ou Copiar. Erros em segundo plano chegam como notificação.
+- Banco de dados versão 2 (preferências), com migração: quem tem a 0.1.0 não perde nenhuma tarefa.
+- 29 testes automáticos (novos: lembretes, horário silencioso e migração).
+
 ## 0.1.0-alpha.1 — 13/11/2026
 Primeira versão do app de verdade (a base), feita a partir do que o protótipo validou.
 - Projeto Kotlin Multiplatform: `shared` (regras, banco e telas) + `androidApp`.
