@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Just in Time (protótipo)</string>
+    <string name="widget_name">Just in Time — prazos</string>
+    <string name="widget_descricao">Contagem regressiva das suas tarefas</string>
+    <string name="widget_titulo">Just in Time</string>
+    <string name="mais_simbolo">+</string>
+    <string name="nenhuma_tarefa">Nenhuma tarefa aberta</string>
+</resources>
