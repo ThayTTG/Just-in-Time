@@ -18,6 +18,7 @@ class AlarmeReceiver : BroadcastReceiver() {
         const val NAO_FEITO = "jit.NAO_FEITO"
         const val ADIAR = "jit.ADIAR"
         const val SIMULAR_ERRO = "jit.SIMULAR_ERRO"
+        const val VITRINE = "jit.VITRINE"
         const val ID = "ocorrencia"
         const val CHAVE = "chave"
     }
@@ -39,6 +40,7 @@ class AlarmeReceiver : BroadcastReceiver() {
             FEITO -> id?.let { tarefas.responder(it, feita = true) }
             NAO_FEITO -> id?.let { tarefas.responder(it, feita = false) }
             ADIAR -> id?.let { tarefas.adiarEm(it, 15 * 60) }
+            VITRINE -> Vitrine.atualizar(c) // uma tarefa mudou de faixa de cor (24 h / 1 h antes)
             SIMULAR_ERRO -> throw IllegalStateException("Erro simulado em segundo plano (teste do relatório)")
         }
     }

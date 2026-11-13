@@ -50,6 +50,7 @@ class AgendadorAndroid(private val context: Context) : Agendador {
     /** Depois de qualquer mudança: recalcula o próximo lembrete. */
     override fun vitrineMudou() {
         Erros.proteger(context, "Agendar lembrete") { agendarProximoLembrete() }
+        Vitrine.atualizar(context) // widget, resumo e bolha
     }
 
     fun agendarProximoLembrete() {

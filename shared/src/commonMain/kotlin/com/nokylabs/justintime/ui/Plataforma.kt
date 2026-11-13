@@ -5,7 +5,7 @@ enum class TipoPermissao(val nome: String, val explicacao: String) {
     NOTIFICACOES("Notificações", "Sem isso, o alarme não aparece nem toca."),
     ALARMES_EXATOS("Alarmes exatos", "Para tocar no segundo certo, mesmo com o celular em repouso."),
     TELA_CHEIA("Tela de alarme no bloqueio", "Para a tela de alarme acender o celular bloqueado."),
-    SOBRE_OUTROS_APPS("Aparecer sobre outros apps", "Para a tela de alarme abrir com o celular em uso (e, em breve, a bolha)."),
+    SOBRE_OUTROS_APPS("Aparecer sobre outros apps", "Para a tela de alarme abrir com o celular em uso e para a bolha."),
     BATERIA("Bateria sem restrição", "Evita que o sistema encerre o app em segundo plano."),
 }
 
@@ -30,6 +30,8 @@ interface Plataforma {
     fun copiar(texto: String)
     /** Para testar o relatório (Configurações → Diagnóstico). */
     fun simularErro()
+    /** A bolha foi fechada no ✕: volta a aparecer. */
+    fun mostrarBolhaDeNovo() {}
 
     object Nenhuma : Plataforma {
         override val versao = "prévia"

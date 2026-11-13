@@ -68,6 +68,9 @@ class Tarefas(
             silencioFim = hora("silencio.fim", p.silencioFim),
             resumoDoDiaAtivo = ler("resumo.ativo")?.toBoolean() ?: p.resumoDoDiaAtivo,
             resumoDoDia = hora("resumo.hora", p.resumoDoDia),
+            resumoNaNotificacao = ler("vitrine.resumo")?.toBoolean() ?: p.resumoNaNotificacao,
+            bolhaAtiva = ler("vitrine.bolha")?.toBoolean() ?: p.bolhaAtiva,
+            bolhaTamanho = ler("vitrine.bolha.tamanho")?.toFloatOrNull()?.coerceIn(0.7f, 1.8f) ?: p.bolhaTamanho,
         )
     }
 
@@ -78,6 +81,9 @@ class Tarefas(
             qp.gravar("silencio.fim", c.silencioFim.toString())
             qp.gravar("resumo.ativo", c.resumoDoDiaAtivo.toString())
             qp.gravar("resumo.hora", c.resumoDoDia.toString())
+            qp.gravar("vitrine.resumo", c.resumoNaNotificacao.toString())
+            qp.gravar("vitrine.bolha", c.bolhaAtiva.toString())
+            qp.gravar("vitrine.bolha.tamanho", c.bolhaTamanho.coerceIn(0.7f, 1.8f).toString())
         }
         agendador.vitrineMudou() // os lembretes mudam de horário
     }

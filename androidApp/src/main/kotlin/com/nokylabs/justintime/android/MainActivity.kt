@@ -10,8 +10,18 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableIntStateOf
 import com.nokylabs.justintime.ui.JustInTimeApp
+import com.nokylabs.justintime.ui.Tela
 
 class MainActivity : ComponentActivity() {
+
+    companion object {
+        /** Vindo do "+" do widget: abre direto o formulário de nova tarefa. */
+        const val NOVA_TAREFA = "nova_tarefa"
+    }
+
+    /** Tela pedida de fora (widget); o número muda a cada pedido. */
+    private val pedido = mutableIntStateOf(0)
+    private var telaPedida: Tela? = null
 
     /** Muda toda vez que a pessoa volta para o app: as telas releem permissões e erros. */
     private val atualizacao = mutableIntStateOf(0)
@@ -28,12 +38,25 @@ class MainActivity : ComponentActivity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) pedirNotificacoes.launch(Manifest.permission.POST_NOTIFICATIONS)
 
+        lerPedido(intent)
         setContent {
             JustInTimeApp(
                 tarefas, plataforma, atualizacao.intValue,
-                avisoDaVersao = "Versão 0.2.0: alarme completo, avisos, horário silencioso e resumo do dia. " +
-                    "Widget, resumo nas notificações e bolha chegam na 0.3.0.",
+                telaPedida = telaPedida, pedido = pedido.intValue,
+                avisoDaVersao = "Versão 0.3.0: widget, resumo nas notificações e bolha. " +
+                    "Próxima ideia na fila: o contador de entregas.",
             )
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        lerPedido(intent)
+    }
+
+    private fun lerPedido(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(NOVA_TAREFA, false) == true) {
+            telaPedida = Tela.Editor(null); pedido.intValue++
         }
     }
 

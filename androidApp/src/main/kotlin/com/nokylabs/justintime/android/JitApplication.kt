@@ -17,6 +17,7 @@ class JitApplication : Application() {
         super.onCreate()
         Erros.instalar(this) // primeiro de tudo: qualquer falha daqui pra frente vira relatório
         Notificacoes.criarCanais(this)
+        Vitrine.criarCanal(this)
         tarefas = Tarefas(bancoNoAndroid(this), AgendadorAndroid(this))
         lembretes = Lembretes(tarefas)
     }

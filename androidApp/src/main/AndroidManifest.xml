@@ -15,6 +15,9 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Pedir para não ser encerrado pela economia de bateria -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Serviço em primeiro plano que mantém a bolha viva -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:name=".JitApplication"
@@ -46,6 +49,27 @@
         <receiver
             android:name=".AlarmeReceiver"
             android:exported="false" />
+
+        <service
+            android:name=".BolhaService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Bolha flutuante com a contagem regressiva da próxima tarefa" />
+        </service>
+
+        <receiver
+            android:name=".PrazosWidget"
+            android:exported="true"
+            android:label="@string/widget_nome">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
 
         <receiver
             android:name=".BootReceiver"

@@ -12,6 +12,7 @@ import com.nokylabs.ui.NokyButton
 import com.nokylabs.ui.NokyButtonKind
 import com.nokylabs.ui.NokyIcons
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +44,9 @@ fun JustInTimeApp(
     atualizacao: Int = 0,
     dark: Boolean? = null,
     telaInicial: Tela = Tela.Lista,
+    /** Tela pedida de fora (ex.: "+" do widget); [pedido] muda a cada pedido novo. */
+    telaPedida: Tela? = null,
+    pedido: Int = 0,
     tique: Boolean = true,
     avisoDaVersao: String? = null,
 ) {
@@ -52,6 +56,7 @@ fun JustInTimeApp(
     }
     tema {
         var tela by remember { mutableStateOf(telaInicial) }
+        LaunchedEffect(pedido) { telaPedida?.let { tela = it } }
         Box(Modifier.fillMaxSize().background(NokyTheme.colors.bg)) {
             when (val t = tela) {
                 Tela.Lista -> TelaLista(

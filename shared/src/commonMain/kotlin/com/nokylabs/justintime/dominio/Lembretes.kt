@@ -17,6 +17,12 @@ data class Config(
     /** Resumo das tarefas de dia inteiro ainda abertas. */
     val resumoDoDiaAtivo: Boolean = true,
     val resumoDoDia: LocalTime = LocalTime(20, 30),
+    /** Notificação fixa com a contagem das próximas tarefas. */
+    val resumoNaNotificacao: Boolean = true,
+    /** Bolha flutuante com a próxima tarefa (precisa de "aparecer sobre outros apps"). */
+    val bolhaAtiva: Boolean = true,
+    /** Tamanho da bolha: 1 = normal, de 0,7 a 1,8. */
+    val bolhaTamanho: Float = 1f,
 ) {
     /** Se [hora] cai no horário silencioso (que pode atravessar a meia-noite: 21:00 → 08:00). */
     fun emSilencio(hora: LocalTime): Boolean {

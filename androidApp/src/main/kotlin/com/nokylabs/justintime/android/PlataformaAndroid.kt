@@ -77,6 +77,13 @@ class PlataformaAndroid(
         Toast.makeText(activity, "Relatório copiado", Toast.LENGTH_SHORT).show()
     }
 
+    override fun mostrarBolhaDeNovo() {
+        activity.tarefas.gravarPreferencia(BolhaService.FECHADA, "")
+        Vitrine.atualizar(activity)
+        if (!Settings.canDrawOverlays(activity))
+            Toast.makeText(activity, "Libere \"Aparecer sobre outros apps\" nas Permissões", Toast.LENGTH_LONG).show()
+    }
+
     override fun simularErro() {
         activity.sendBroadcast(Intent(activity, AlarmeReceiver::class.java).setAction(AlarmeReceiver.SIMULAR_ERRO))
         Toast.makeText(activity, "Erro simulado: deve chegar uma notificação", Toast.LENGTH_SHORT).show()

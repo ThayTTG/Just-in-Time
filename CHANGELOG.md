@@ -1,5 +1,20 @@
 # Changelog — Just in Time
 
+## 0.3.0-alpha.1 — 13/11/2026
+Widget, resumo e bolha, trazidos do protótipo com o visual do NokyLabs.UI.
+- **Widget** ("Just in Time — prazos"): até 3 tarefas, a próxima em destaque e as seguintes recuadas,
+  contagem regressiva que anda sozinha (sem gastar bateria), barra na cor da tarefa ou da urgência,
+  "Responder" em amarelo quando o prazo chegou. O **+** abre direto o formulário de nova tarefa.
+- **Resumo nas notificações**: fixo e silencioso; recolhido mostra a próxima tarefa, expandido mostra
+  até 2 + "+N tarefas".
+- **Bolha flutuante** com a próxima tarefa: arrastável, toque abre o app (ou a tela de alarme, se o
+  prazo chegou), ✕ esconde até a próxima tarefa mudar, e o tamanho muda com dois dedos, segurando a bolha
+  (A− / A+) ou pelo controle nas Configurações.
+- Widget, resumo e bolha calculam a contagem a partir da mesma base e se atualizam juntos, inclusive
+  24 h e 1 h antes de cada prazo (quando a cor muda).
+- Configurações → "Fora do app": ligar/desligar resumo e bolha, tamanho da bolha, mostrar a bolha de novo.
+- ROADMAP.md com a ideia do **contador de entregas** (dia/semana).
+
 ## 0.2.0-alpha.1 — 13/11/2026
 Alarme completo, trazido do protótipo para a base nova.
 - **Tela de alarme** com o NokyLabs.UI: acende o celular bloqueado e, com "aparecer sobre outros apps",

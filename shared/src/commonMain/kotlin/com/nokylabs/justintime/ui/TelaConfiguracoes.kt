@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
@@ -96,6 +97,31 @@ fun TelaConfiguracoes(
                             if (!p.ok) NokyButton("Liberar", { plataforma.liberar(p.tipo) }, kind = NokyButtonKind.Soft)
                         }
                     }
+                }
+            }
+
+            // Widget, resumo e bolha
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                NokySectionLabel("Fora do app")
+                Text("O widget fica na tela inicial: segure um espaço vazio → Widgets → Just in Time.", style = t.secondary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Resumo nas notificações", style = t.body, modifier = Modifier.weight(1f))
+                    NokyChip(if (config.resumoNaNotificacao) "Ligado" else "Desligado", config.resumoNaNotificacao,
+                        { salvar(config.copy(resumoNaNotificacao = !config.resumoNaNotificacao)) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Bolha com a próxima tarefa", style = t.body, modifier = Modifier.weight(1f))
+                    NokyChip(if (config.bolhaAtiva) "Ligada" else "Desligada", config.bolhaAtiva,
+                        { salvar(config.copy(bolhaAtiva = !config.bolhaAtiva)) })
+                }
+                if (config.bolhaAtiva) {
+                    Text("Tamanho da bolha (também dá para usar dois dedos, ou segurar a bolha)", style = t.muted)
+                    var tamanho by remember { mutableStateOf(config.bolhaTamanho) }
+                    Slider(
+                        value = tamanho, onValueChange = { tamanho = it }, valueRange = 0.7f..1.8f,
+                        onValueChangeFinished = { salvar(config.copy(bolhaTamanho = tamanho)) },
+                    )
+                    NokyButton("Mostrar a bolha de novo", { plataforma.mostrarBolhaDeNovo() }, kind = NokyButtonKind.Ghost)
                 }
             }
 
