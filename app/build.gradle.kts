@@ -11,8 +11,8 @@ android {
         applicationId = "com.nokylabs.justintime.prototipo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.0.2-prototipo"
+        versionCode = 3
+        versionName = "0.0.3-prototipo"
     }
 
     // Chave de depuração fixa, guardada no projeto: assim qualquer computador gera
@@ -35,4 +35,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
 }

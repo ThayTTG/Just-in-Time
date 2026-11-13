@@ -7,36 +7,33 @@
     android:orientation="horizontal">
 
     <LinearLayout
+        android:id="@+id/linha1"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical">
-
-    <LinearLayout
-        android:id="@+id/linha1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_marginStart="0dp"
         android:layout_marginTop="4dp"
         android:gravity="center_vertical"
+        android:layout_weight="1"
         android:orientation="horizontal"
         android:visibility="gone">
 
         <TextView
             android:id="@+id/barra1"
-            android:layout_width="4dp"
-            android:layout_height="22dp"
+            android:layout_width="5dp"
+            android:layout_height="26dp"
             android:background="#8E89AD" />
 
         <TextView
             android:id="@+id/nome1"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="10dp"
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
             android:textAppearance="@android:style/TextAppearance.Material.Notification.Title"
-            android:textSize="14sp" />
+            android:textStyle="bold"
+            android:textSize="15sp" />
 
         <Chronometer
             android:id="@+id/crono1"
@@ -45,7 +42,7 @@
             android:layout_marginStart="8dp"
             android:fontFamily="monospace"
             android:textAppearance="@android:style/TextAppearance.Material.Notification.Title"
-            android:textSize="15sp"
+            android:textSize="16sp"
             android:textStyle="bold"
             android:visibility="gone" />
 
@@ -54,11 +51,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:textSize="13sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:visibility="gone" />
-    </LinearLayout>
-
     </LinearLayout>
 
     <TextView

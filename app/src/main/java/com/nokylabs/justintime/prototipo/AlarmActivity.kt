@@ -69,8 +69,8 @@ class AlarmActivity : Activity() {
             if (negrito) typeface = Typeface.DEFAULT_BOLD
             setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
         }
-        raiz.addView(texto("O prazo chegou", 18f, "#B9B4D6"))
-        raiz.addView(texto(t.titulo, 30f, "#FFFFFF", negrito = true))
+        raiz.addView(texto("O prazo chegou", 18f, "#B9B4D6").apply { if (t.cor != 0) setTextColor(t.cor) })
+        raiz.addView(texto(t.rotulo, 30f, "#FFFFFF", negrito = true))
         raiz.addView(texto("Prazo: ${Store.amigavel(t.prazo)}", 16f, "#B9B4D6"))
         if (t.disparouEm > 0) {
             val atraso = (t.disparouEm - t.prazo) / 1000.0

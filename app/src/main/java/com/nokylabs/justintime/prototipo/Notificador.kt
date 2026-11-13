@@ -144,7 +144,7 @@ object Notificador {
         val icone = Icon.createWithResource(c, R.drawable.ic_stat_alarme)
         val b = Notification.Builder(c, canal)
             .setSmallIcon(R.drawable.ic_stat_alarme)
-            .setContentTitle(t.titulo)
+            .setContentTitle(t.rotulo)
             .setContentText("O prazo chegou (${Store.amigavel(t.prazo)}). Você fez?")
             .setCategory(Notification.CATEGORY_ALARM)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
@@ -156,6 +156,7 @@ object Notificador {
             .addAction(Notification.Action.Builder(icone, "Não feito", piAcao(c, ACAO_NAO_FEITO, t.id, 2)).build())
             .addAction(Notification.Action.Builder(icone, "Adiar 5 min", piAcao(c, ACAO_ADIAR, t.id, 3)).build())
         if (alto) b.setFullScreenIntent(piTelaAlarme(c, t.id), true)
+        if (t.cor != 0) b.setColor(t.cor)
         val n = b.build()
         if (alto) n.flags = n.flags or Notification.FLAG_INSISTENT // repete o som até interagir
         if (!alto) nm(c).cancel(t.id) // troca de canal: remove a versão barulhenta antes

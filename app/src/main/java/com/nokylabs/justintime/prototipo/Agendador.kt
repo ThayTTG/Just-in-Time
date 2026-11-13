@@ -47,10 +47,10 @@ object Agendador {
                 c, 0, Intent(c, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
             )
             am(c).setAlarmClock(AlarmManager.AlarmClockInfo(t.prazo, abrirApp), pi)
-            Store.log(c, "Agendado (exato): \"${t.titulo}\" para ${Store.hora(t.prazo)}")
+            Store.log(c, "Agendado (exato): \"${t.rotulo}\" para ${Store.hora(t.prazo)}")
         } else {
             am(c).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, t.prazo, pi)
-            Store.log(c, "⚠ SEM permissão de alarme exato — \"${t.titulo}\" agendado de forma aproximada")
+            Store.log(c, "⚠ SEM permissão de alarme exato — \"${t.rotulo}\" agendado de forma aproximada")
         }
     }
 
@@ -90,10 +90,31 @@ object Agendador {
                 // O prazo passou com o celular desligado: fica aguardando resposta
                 t.status = Status.AGUARDANDO
                 Store.salvar(c, t)
-                Store.log(c, "Prazo de \"${t.titulo}\" passou enquanto o alarme não podia tocar → Aguardando resposta")
+                Store.log(c, "Prazo de \"${t.rotulo}\" passou enquanto o alarme não podia tocar → Aguardando resposta")
+                gerarProxima(c, t)
             }
         }
         Store.log(c, "Reagendamento ($motivo): $reagendadas alarme(s)")
         DeadlineWidget.atualizarTodos(c)
+    }
+
+    /**
+     * Repetição: assim que um prazo chega, a próxima ocorrência da série já é criada e
+     * agendada, sem esperar a resposta. Adiar uma ocorrência não muda as seguintes.
+     */
+    fun gerarProxima(c: Context, t: Tarefa) {
+        val regra = t.regra
+        if (!regra.repete) return
+        val depoisDe = maxOf(System.currentTimeMillis(), t.prazoOriginal)
+        val proxima = regra.proximaApos(t.ancora, depoisDe) ?: return
+        val jaExiste = Store.tarefas(c).any { it.serie == t.serie && it.prazoOriginal == proxima }
+        if (jaExiste) return
+        val nova = t.copy(
+            id = Store.novoId(c), prazo = proxima, prazoOriginal = proxima,
+            status = Status.ATIVA, disparouEm = 0L, adiamentos = 0,
+        )
+        Store.salvar(c, nova)
+        agendarPrazo(c, nova)
+        Store.log(c, "🔁 Próxima de \"${t.rotulo}\": ${Store.amigavel(proxima)} (${regra.descricao()})")
     }
 }

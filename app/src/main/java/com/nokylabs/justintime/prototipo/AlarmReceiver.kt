@@ -50,12 +50,13 @@ class AlarmReceiver : BroadcastReceiver() {
         Store.salvar(c, t)
 
         val atrasoS = (agora - t.prazo) / 1000.0
-        Store.log(c, "🔔 Disparou \"${t.titulo}\" — atraso de ${"%.1f".format(atrasoS)} s")
+        Store.log(c, "🔔 Disparou \"${t.rotulo}\" — atraso de ${"%.1f".format(atrasoS)} s")
         if (!Notificador.podeNotificar(c)) Store.log(c, "⚠ Notificações desativadas: o alarme não aparece")
         if (!Notificador.podeTelaCheia(c)) Store.log(c, "⚠ Sem permissão de tela cheia: aparece só como notificação")
 
         Notificador.mostrarAlarme(c, t, alto = true)
         Relatorio.proteger(c, "Abrir tela de alarme") { abrirTelaDeAlarme(c, t) }
+        Relatorio.proteger(c, "Gerar próxima repetição") { Agendador.gerarProxima(c, t) }
         Agendador.agendarSilenciar(c, id)
         DeadlineWidget.atualizarTodos(c)
     }
@@ -64,7 +65,7 @@ class AlarmReceiver : BroadcastReceiver() {
         val t = Store.get(c, id) ?: return
         if (t.status != Status.AGUARDANDO) return
         Notificador.mostrarAlarme(c, t, alto = false)
-        Store.log(c, "🔕 Sem resposta em 60 s: \"${t.titulo}\" segue aguardando, agora sem som")
+        Store.log(c, "🔕 Sem resposta em 60 s: \"${t.rotulo}\" segue aguardando, agora sem som")
     }
 
     private fun responder(c: Context, id: Int, novo: String) {
@@ -74,7 +75,7 @@ class AlarmReceiver : BroadcastReceiver() {
         Agendador.cancelar(c, id)
         Notificador.cancelar(c, id)
         AlarmActivity.fecharSeAberta(c)
-        Store.log(c, "Resposta: \"${t.titulo}\" → ${Status.rotulo(novo)}")
+        Store.log(c, "Resposta: \"${t.rotulo}\" → ${Status.rotulo(novo)}")
         DeadlineWidget.atualizarTodos(c)
     }
 
@@ -87,7 +88,7 @@ class AlarmReceiver : BroadcastReceiver() {
         Agendador.cancelar(c, id)
         Notificador.cancelar(c, id)
         AlarmActivity.fecharSeAberta(c)
-        Store.log(c, "Adiada: \"${t.titulo}\" (adiamento nº ${t.adiamentos})")
+        Store.log(c, "Adiada: \"${t.rotulo}\" (adiamento nº ${t.adiamentos})")
         Agendador.agendarPrazo(c, t)
         DeadlineWidget.atualizarTodos(c)
     }

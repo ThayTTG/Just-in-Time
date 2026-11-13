@@ -97,28 +97,38 @@ object Vitrine {
         }
     }
 
+    /**
+     * Base do Chronometer para um prazo. Widget, resumo e bolha usam SEMPRE esta função,
+     * então todos partem exatamente do mesmo instante.
+     */
+    fun baseCrono(prazo: Long): Long = prazo - (System.currentTimeMillis() - SystemClock.elapsedRealtime())
+
+    /**
+     * Cor da barra: a cor escolhida para a tarefa; sem cor, a cor da urgência.
+     * A urgência continua visível pelo cronômetro, que fica vermelho na última hora.
+     */
+    fun corDaBarra(t: Tarefa, restante: Long): Int = when {
+        t.cor != 0 -> t.cor
+        t.status == Status.AGUARDANDO || restante <= 0 -> COR_RESPONDER
+        restante > UM_DIA -> COR_NEUTRA
+        restante > UMA_HORA -> COR_ATENCAO
+        else -> COR_CRITICA
+    }
+
     fun preencherLinha(rv: RemoteViews, ids: IdsLinha, t: Tarefa, agora: Long, fundoEscuro: Boolean) {
-        rv.setTextViewText(ids.nome, t.titulo)
+        rv.setTextViewText(ids.nome, t.rotulo)
         val restante = t.prazo - agora
+        barra(rv, ids, corDaBarra(t, restante))
         when {
-            t.status == Status.AGUARDANDO || restante <= 0 -> {
-                barra(rv, ids, COR_RESPONDER)
+            t.status == Status.AGUARDANDO || restante <= 0 ->
                 info(rv, ids, "Responder", if (fundoEscuro) COR_RESPONDER else COR_RESPONDER_ESCURA)
-            }
-            restante > UM_DIA -> {
-                barra(rv, ids, COR_NEUTRA)
-                info(rv, ids, Store.amigavel(t.prazo), COR_NEUTRA)
-            }
+            restante > UM_DIA ->
+                info(rv, ids, Store.curto(t.prazo), COR_NEUTRA)
             else -> {
-                barra(rv, ids, if (restante > UMA_HORA) COR_ATENCAO else COR_CRITICA)
-                // Converte o prazo (relógio de parede) para a base do Chronometer
-                rv.setChronometer(ids.crono, SystemClock.elapsedRealtime() + restante, null, true)
+                rv.setChronometer(ids.crono, baseCrono(t.prazo), null, true)
                 rv.setChronometerCountDown(ids.crono, true)
-                when {
-                    restante <= UMA_HORA -> rv.setTextColor(ids.crono, COR_CRITICA)
-                    fundoEscuro -> rv.setTextColor(ids.crono, COR_BRANCA)
-                    // fundo do sistema (notificação): mantém a cor padrão do tema
-                }
+                // Fora da última hora, mantém a cor do layout (branca no widget, a do tema na notificação)
+                if (restante <= UMA_HORA) rv.setTextColor(ids.crono, COR_CRITICA)
                 rv.setViewVisibility(ids.crono, View.VISIBLE)
                 rv.setViewVisibility(ids.info, View.GONE)
             }

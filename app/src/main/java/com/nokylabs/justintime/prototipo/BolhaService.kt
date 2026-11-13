@@ -10,11 +10,11 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
-import android.os.SystemClock
 import android.provider.Settings
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.WindowManager
 import android.widget.Chronometer
@@ -100,33 +100,37 @@ class BolhaService : Service() {
 
     // ---------------- Desenho ----------------
 
-    private fun px(v: Int) = (v * resources.displayMetrics.density).toInt()
+    private val densidade get() = resources.displayMetrics.density
+    private fun px(v: Int) = (v * densidade).toInt()
+
+    private var escala = 1f
+    private lateinit var coluna: LinearLayout
+    private lateinit var fechar: TextView
+    private lateinit var fundo: GradientDrawable
+    private lateinit var controles: LinearLayout
+    private val esconderControles = Runnable { if (::controles.isInitialized) controles.visibility = View.GONE }
 
     private fun mostrar(t: Tarefa, agora: Long) {
         if (raiz == null) criarBolha()
         tarefaAtual = t
-        nome.text = t.titulo
+        nome.text = t.rotulo
         val restante = t.prazo - agora
+        barra.setBackgroundColor(Vitrine.corDaBarra(t, restante))
         when {
-            t.status == Status.AGUARDANDO || restante <= 0 -> {
-                barra.setBackgroundColor(Vitrine.COR_RESPONDER)
-                mostrarInfo("Responder", Vitrine.COR_RESPONDER)
-            }
-            restante > Vitrine.UM_DIA -> {
-                barra.setBackgroundColor(Vitrine.COR_NEUTRA)
-                mostrarInfo(Store.amigavel(t.prazo), Vitrine.COR_NEUTRA)
-            }
+            t.status == Status.AGUARDANDO || restante <= 0 -> mostrarInfo("Responder", Vitrine.COR_RESPONDER)
+            restante > Vitrine.UM_DIA -> mostrarInfo(Store.curto(t.prazo), Vitrine.COR_NEUTRA)
             else -> {
-                val critico = restante <= Vitrine.UMA_HORA
-                barra.setBackgroundColor(if (critico) Vitrine.COR_CRITICA else Vitrine.COR_ATENCAO)
-                crono.base = SystemClock.elapsedRealtime() + restante
+                crono.base = Vitrine.baseCrono(t.prazo) // mesma base do widget e do resumo
                 crono.isCountDown = true
-                crono.setTextColor(if (critico) Vitrine.COR_CRITICA else Vitrine.COR_BRANCA)
+                crono.setTextColor(if (restante <= Vitrine.UMA_HORA) Vitrine.COR_CRITICA else Vitrine.COR_BRANCA)
                 crono.start()
                 crono.visibility = View.VISIBLE
                 info.visibility = View.GONE
             }
         }
+        // O tamanho pode ter mudado pelas Preferências
+        val e = Store.escalaBolha(this)
+        if (e != escala) aplicarEscala(e)
     }
 
     private fun mostrarInfo(texto: String, cor: Int) {
@@ -137,44 +141,79 @@ class BolhaService : Service() {
         info.visibility = View.VISIBLE
     }
 
+    /** Ajusta todos os tamanhos da bolha a partir da escala (1.0 = normal). */
+    private fun aplicarEscala(e: Float) {
+        escala = e.coerceIn(0.7f, 1.8f)
+        fun s(v: Int) = (v * densidade * escala).toInt()
+        nome.textSize = 14f * escala; nome.maxWidth = s(190)
+        crono.textSize = 16f * escala
+        info.textSize = 13f * escala
+        fechar.textSize = 16f * escala; fechar.setPadding(s(10), s(6), s(4), s(6))
+        coluna.setPadding(s(10), 0, s(4), 0)
+        raiz?.setPadding(s(12), s(8), s(8), s(8))
+        fundo.cornerRadius = s(20).toFloat()
+        barra.layoutParams = LinearLayout.LayoutParams(s(4), s(34))
+        raiz?.let { if (it.isAttachedToWindow) wm.updateViewLayout(it, params) }
+    }
+
+    private fun mudarTamanho(delta: Float) {
+        aplicarEscala(escala + delta)
+        Store.salvarEscalaBolha(this, escala)
+        raiz?.removeCallbacks(esconderControles)
+        raiz?.postDelayed(esconderControles, 4000)
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     private fun criarBolha() {
         barra = View(this)
         nome = TextView(this).apply {
-            setTextColor(Vitrine.COR_BRANCA); textSize = 14f; typeface = Typeface.DEFAULT_BOLD
-            maxWidth = px(190); maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+            setTextColor(Vitrine.COR_BRANCA); typeface = Typeface.DEFAULT_BOLD
+            maxLines = 1; ellipsize = TextUtils.TruncateAt.END
         }
-        crono = Chronometer(this).apply { textSize = 15f; typeface = Typeface.MONOSPACE }
-        info = TextView(this).apply { textSize = 13f; typeface = Typeface.DEFAULT_BOLD }
-        val coluna = LinearLayout(this).apply {
+        crono = Chronometer(this).apply { typeface = Typeface.MONOSPACE }
+        info = TextView(this).apply { typeface = Typeface.DEFAULT_BOLD }
+        coluna = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(px(10), 0, px(4), 0)
             addView(nome); addView(crono); addView(info)
         }
-        val fechar = TextView(this).apply {
-            text = "✕"; textSize = 16f; setTextColor(Vitrine.COR_NEUTRA)
-            setPadding(px(10), px(6), px(4), px(6))
+        fechar = TextView(this).apply {
+            text = "✕"; setTextColor(Vitrine.COR_NEUTRA)
             contentDescription = "Fechar bolha"
             setOnClickListener {
                 tarefaAtual?.let {
                     Store.fecharBolhaPara(this@BolhaService, it.id)
-                    Store.log(this@BolhaService, "Bolha fechada para \"${it.titulo}\"")
+                    Store.log(this@BolhaService, "Bolha fechada para \"${it.rotulo}\"")
                 }
                 Vitrine.atualizarTudo(this@BolhaService)
             }
         }
-        val r = LinearLayout(this).apply {
+        val principal = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(px(12), px(8), px(8), px(8))
-            background = GradientDrawable().apply {
-                cornerRadius = px(20).toFloat()
-                setColor(0xEE1E1B2E.toInt())
-            }
+            addView(barra); addView(coluna); addView(fechar)
+        }
+        // Botões de tamanho: aparecem ao segurar a bolha
+        fun botaoTamanho(rotulo: String, delta: Float) = TextView(this).apply {
+            text = rotulo; textSize = 15f; setTextColor(Vitrine.COR_BRANCA); typeface = Typeface.DEFAULT_BOLD
+            setPadding(px(14), px(6), px(14), px(6))
+            background = GradientDrawable().apply { cornerRadius = px(14).toFloat(); setColor(0xFF5E35B1.toInt()) }
+            setOnClickListener { mudarTamanho(delta) }
+        }
+        controles = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, px(8), 0, 0)
+            visibility = View.GONE
+            addView(botaoTamanho("A−", -0.15f))
+            addView(View(this@BolhaService), LinearLayout.LayoutParams(px(10), 1))
+            addView(botaoTamanho("A+", 0.15f))
+        }
+        fundo = GradientDrawable().apply { setColor(0xEE1E1B2E.toInt()) }
+        val r = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = fundo
             elevation = px(6).toFloat()
-            addView(barra, LinearLayout.LayoutParams(px(4), px(32)))
-            addView(coluna)
-            addView(fechar)
+            addView(principal); addView(controles)
         }
 
         val (x, y) = Store.posicaoBolha(this)
@@ -186,31 +225,55 @@ class BolhaService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.START; this.x = x; this.y = y }
 
-        // Arrastar a bolha; um toque curto abre o app
-        var inicioX = 0; var inicioY = 0; var toqueX = 0f; var toqueY = 0f; var arrastou = false
+        raiz = r
+        aplicarEscala(Store.escalaBolha(this))
+
+        // Pinça com dois dedos: muda o tamanho
+        val pinca = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(d: ScaleGestureDetector): Boolean { aplicarEscala(escala * d.scaleFactor); return true }
+            override fun onScaleEnd(d: ScaleGestureDetector) { Store.salvarEscalaBolha(this@BolhaService, escala) }
+        })
+
+        // Um dedo: arrastar; toque curto abre o app; segurar mostra A− / A+
+        var inicioX = 0; var inicioY = 0; var toqueX = 0f; var toqueY = 0f
+        var arrastou = false; var pincou = false; var segurou = false
+        val aoSegurar = Runnable {
+            segurou = true
+            controles.visibility = View.VISIBLE
+            r.removeCallbacks(esconderControles); r.postDelayed(esconderControles, 4000)
+        }
         r.setOnTouchListener { _, e ->
-            when (e.action) {
+            pinca.onTouchEvent(e)
+            if (e.pointerCount > 1 || pinca.isInProgress) {
+                pincou = true; r.removeCallbacks(aoSegurar)
+                return@setOnTouchListener true
+            }
+            when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    inicioX = params.x; inicioY = params.y; toqueX = e.rawX; toqueY = e.rawY; arrastou = false; true
+                    inicioX = params.x; inicioY = params.y; toqueX = e.rawX; toqueY = e.rawY
+                    arrastou = false; pincou = false; segurou = false
+                    r.postDelayed(aoSegurar, 500)
                 }
-                MotionEvent.ACTION_MOVE -> {
+                MotionEvent.ACTION_MOVE -> if (!pincou) {
                     val dx = e.rawX - toqueX; val dy = e.rawY - toqueY
-                    if (abs(dx) > px(6) || abs(dy) > px(6)) arrastou = true
+                    if (abs(dx) > px(6) || abs(dy) > px(6)) { arrastou = true; r.removeCallbacks(aoSegurar) }
                     if (arrastou) {
                         params.x = inicioX + dx.toInt(); params.y = inicioY + dy.toInt()
                         wm.updateViewLayout(r, params)
                     }
-                    true
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (arrastou) Store.salvarPosicaoBolha(this, params.x, params.y) else abrirTarefa()
-                    true
+                    r.removeCallbacks(aoSegurar)
+                    when {
+                        arrastou -> Store.salvarPosicaoBolha(this, params.x, params.y)
+                        !pincou && !segurou -> abrirTarefa()
+                    }
                 }
-                else -> false
+                MotionEvent.ACTION_CANCEL -> r.removeCallbacks(aoSegurar)
             }
+            true
         }
         wm.addView(r, params)
-        raiz = r
     }
 
     private fun abrirTarefa() {

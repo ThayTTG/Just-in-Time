@@ -19,6 +19,11 @@ import android.provider.Settings
 import android.view.Gravity
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.HorizontalScrollView
+import android.widget.NumberPicker
+import android.widget.SeekBar
+import android.graphics.drawable.GradientDrawable
+import android.icu.text.BreakIterator
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -41,6 +46,13 @@ class MainActivity : Activity() {
     private lateinit var botaoHora: Button
     private val dp by lazy { resources.displayMetrics.density }
     private var dialogoErroAberto = false
+
+    // Escolhas da nova tarefa
+    private lateinit var campoEmoji: EditText
+    private lateinit var linhaCores: LinearLayout
+    private lateinit var botaoRepetir: Button
+    private var corEscolhida = 0
+    private var repeticaoEscolhida = Repeticao()
 
     /** Data e hora escolhidas para o prazo. Começa na próxima hora cheia. */
     private val prazoEscolhido: Calendar = Calendar.getInstance().apply {
@@ -105,14 +117,36 @@ class MainActivity : Activity() {
         }
 
         col.addView(titulo("1. Nova tarefa"))
+        val linhaNome = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        campoEmoji = EditText(this).apply {
+            hint = "🙂"; textSize = 22f; gravity = Gravity.CENTER
+            setOnFocusChangeListener { _, foco -> if (!foco) setText(primeiroEmoji(text.toString())) }
+        }
         campoNome = EditText(this).apply { hint = "O que precisa ser feito?" }
-        col.addView(campoNome)
-        col.addView(texto("Prazo de entrega", 12f, "#8E89AD").apply { setPadding(0, px(10), 0, 0) })
+        linhaNome.addView(campoEmoji, LinearLayout.LayoutParams(px(56), -2))
+        linhaNome.addView(campoNome, LinearLayout.LayoutParams(0, -2, 1f))
+        col.addView(linhaNome)
+
+        col.addView(rotuloCampo("Ícone (opcional)"))
+        col.addView(linhaDeEmojis())
+        col.addView(rotuloCampo("Cor (opcional)"))
+        linhaCores = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        col.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(linhaCores) })
+        desenharCores()
+
+        col.addView(rotuloCampo("Prazo de entrega"))
         botaoData = botao("") { escolherData() }
         botaoHora = botao("") { escolherHora() }
         col.addView(linhaDeBotoes(botaoData, botaoHora))
+        col.addView(rotuloCampo("Repetição"))
+        botaoRepetir = botao("") { escolherRepeticao() }
+        col.addView(botaoRepetir)
         atualizarBotoesPrazo()
-        col.addView(botao("Agendar tarefa") { agendarEscolhida() })
+        col.addView(botao("Agendar tarefa") { agendarEscolhida() }.apply {
+            setTextColor(Color.WHITE); textSize = 16f
+            background = GradientDrawable().apply { cornerRadius = px(12).toFloat(); setColor(Color.parseColor("#5E35B1")) }
+            layoutParams = LinearLayout.LayoutParams(-1, px(52)).apply { topMargin = px(14) }
+        })
 
         col.addView(titulo("2. Tarefas"))
         caixaTarefas = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -136,6 +170,19 @@ class MainActivity : Activity() {
                 if (v && !Settings.canDrawOverlays(this@MainActivity)) toast("Libere \"Aparecer sobre outros apps\" em Permissões")
                 Vitrine.atualizarTudo(this@MainActivity)
             }
+        })
+        col.addView(rotuloCampo("Tamanho da bolha (ou segure a bolha / use dois dedos)"))
+        col.addView(SeekBar(this).apply {
+            max = 110
+            progress = ((Store.escalaBolha(this@MainActivity) - 0.7f) * 100).toInt()
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar, v: Int, doUsuario: Boolean) {}
+                override fun onStartTrackingTouch(sb: SeekBar) {}
+                override fun onStopTrackingTouch(sb: SeekBar) {
+                    Store.salvarEscalaBolha(this@MainActivity, 0.7f + sb.progress / 100f)
+                    Vitrine.atualizarTudo(this@MainActivity)
+                }
+            })
         })
         col.addView(botao("Mostrar a bolha de novo") {
             Store.fecharBolhaPara(this, -1); Vitrine.atualizarTudo(this)
@@ -172,8 +219,140 @@ class MainActivity : Activity() {
     // ---------------- Data e hora do prazo ----------------
 
     private fun atualizarBotoesPrazo() {
-        botaoData.text = "📅 " + Store.data(prazoEscolhido.timeInMillis)
-        botaoHora.text = "🕒 " + Store.soHora(prazoEscolhido.timeInMillis)
+        val porHorarios = repeticaoEscolhida.tipo == Repeticao.Tipo.SEMANAL
+        botaoData.isEnabled = !porHorarios; botaoHora.isEnabled = !porHorarios
+        if (porHorarios) {
+            botaoData.text = "📅 pelos horários"; botaoHora.text = "🕒 pelos horários"
+        } else {
+            botaoData.text = "📅 " + Store.data(prazoEscolhido.timeInMillis)
+            botaoHora.text = "🕒 " + Store.soHora(prazoEscolhido.timeInMillis)
+        }
+        botaoRepetir.text = "🔁 " + repeticaoEscolhida.descricao()
+    }
+
+    private fun rotuloCampo(s: String) = texto(s, 12f, "#8E89AD").apply { setPadding(0, px(12), 0, px(2)) }
+
+    // ---------------- Emoji e cor ----------------
+
+    /** Fica só com o primeiro "caractere visível" (um emoji pode ter vários códigos). */
+    private fun primeiroEmoji(s: String): String {
+        val t = s.trim()
+        if (t.isEmpty()) return ""
+        val it = BreakIterator.getCharacterInstance().apply { setText(t) }
+        val fim = it.next()
+        return if (fim == BreakIterator.DONE) t else t.substring(0, fim)
+    }
+
+    private fun linhaDeEmojis(): HorizontalScrollView {
+        val linha = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        (listOf("∅") + Paleta.EMOJIS).forEach { e ->
+            linha.addView(TextView(this).apply {
+                text = e; textSize = 24f; setPadding(px(8), px(4), px(8), px(4))
+                setOnClickListener { campoEmoji.setText(if (e == "∅") "" else e) }
+            })
+        }
+        return HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(linha) }
+    }
+
+    private fun desenharCores() {
+        linhaCores.removeAllViews()
+        (listOf("Sem cor" to 0) + Paleta.CORES).forEach { (nome, cor) ->
+            val escolhida = cor == corEscolhida
+            linhaCores.addView(TextView(this).apply {
+                contentDescription = nome
+                text = if (cor == 0) "∅" else if (escolhida) "✓" else ""
+                gravity = Gravity.CENTER; textSize = 16f
+                setTextColor(if (cor == 0) Color.parseColor("#8E89AD") else Color.WHITE)
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(if (cor == 0) Color.TRANSPARENT else cor)
+                    setStroke(px(if (escolhida) 3 else 1), Color.parseColor(if (escolhida) "#1E1B2E" else "#C9C5DB"))
+                }
+                layoutParams = LinearLayout.LayoutParams(px(38), px(38)).apply { marginEnd = px(8) }
+                setOnClickListener { corEscolhida = cor; desenharCores() }
+            })
+        }
+    }
+
+    // ---------------- Repetição ----------------
+
+    private fun escolherRepeticao() {
+        val opcoes = arrayOf(
+            "Não repete", "Todo dia", "Toda semana", "A cada 15 dias", "Todo mês", "Todo ano",
+            "Personalizado (a cada N…)", "Dias e horários específicos…"
+        )
+        AlertDialog.Builder(this).setTitle("Repetir").setItems(opcoes) { _, i ->
+            val I = Repeticao.Tipo.INTERVALO
+            when (i) {
+                0 -> definirRepeticao(Repeticao())
+                1 -> definirRepeticao(Repeticao(I, 1, Repeticao.Unidade.DIA))
+                2 -> definirRepeticao(Repeticao(I, 1, Repeticao.Unidade.SEMANA))
+                3 -> definirRepeticao(Repeticao(I, 2, Repeticao.Unidade.SEMANA))
+                4 -> definirRepeticao(Repeticao(I, 1, Repeticao.Unidade.MES))
+                5 -> definirRepeticao(Repeticao(I, 1, Repeticao.Unidade.ANO))
+                6 -> escolherPersonalizado()
+                7 -> editarHorarios((if (repeticaoEscolhida.tipo == Repeticao.Tipo.SEMANAL) repeticaoEscolhida.horarios else emptyList()).toMutableList())
+            }
+        }.show()
+    }
+
+    private fun definirRepeticao(r: Repeticao) { repeticaoEscolhida = r; atualizarBotoesPrazo() }
+
+    private fun escolherPersonalizado() {
+        val unidades = Repeticao.Unidade.values()
+        val numero = NumberPicker(this).apply { minValue = 1; maxValue = 99; value = 2 }
+        val unidade = NumberPicker(this).apply {
+            minValue = 0; maxValue = unidades.size - 1
+            displayedValues = unidades.map { it.plural }.toTypedArray(); value = 1
+        }
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+            addView(texto("A cada", 16f, "#1E1B2E")); addView(numero); addView(unidade)
+        }
+        AlertDialog.Builder(this).setTitle("Repetir a cada…").setView(caixa)
+            .setPositiveButton("OK") { _, _ ->
+                definirRepeticao(Repeticao(Repeticao.Tipo.INTERVALO, numero.value, unidades[unidade.value]))
+            }
+            .setNegativeButton("Cancelar", null).show()
+    }
+
+    /** Lista de "dia + horário" (ex.: seg de manhã, qui à noite, sáb à tarde). */
+    private fun editarHorarios(lista: MutableList<Horario>) {
+        val caixa = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(20), px(8), px(20), 0) }
+        val ordenados = Repeticao(Repeticao.Tipo.SEMANAL, horarios = lista).horariosOrdenados()
+        if (ordenados.isEmpty()) caixa.addView(texto("Nenhum horário ainda.", 14f))
+        var dialogo: AlertDialog? = null
+        ordenados.forEach { h ->
+            val linha = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            linha.addView(texto("${Repeticao.DIAS_LONGOS[h.diaSemana - 1]} às %02d:%02d".format(h.hora, h.minuto), 16f, "#1E1B2E"),
+                LinearLayout.LayoutParams(0, -2, 1f))
+            linha.addView(botao("Remover") { lista.remove(h); dialogo?.dismiss(); editarHorarios(lista) })
+            caixa.addView(linha)
+        }
+        caixa.addView(botao("+ Adicionar dia e horário") { dialogo?.dismiss(); adicionarHorario(lista) })
+        dialogo = AlertDialog.Builder(this).setTitle("Dias e horários").setView(caixa)
+            .setPositiveButton("Pronto") { _, _ ->
+                definirRepeticao(if (lista.isEmpty()) Repeticao() else Repeticao(Repeticao.Tipo.SEMANAL, horarios = lista.toList()))
+            }
+            .setNegativeButton("Cancelar", null).show()
+    }
+
+    private fun adicionarHorario(lista: MutableList<Horario>) {
+        AlertDialog.Builder(this).setTitle("Qual dia?").setItems(Repeticao.DIAS_LONGOS.toTypedArray()) { _, i ->
+            val dia = i + 1 // Calendar.SUNDAY = 1
+            val periodos = arrayOf("Manhã (08:00)", "Tarde (14:00)", "Noite (20:00)", "Escolher horário…")
+            AlertDialog.Builder(this).setTitle(Repeticao.DIAS_LONGOS[i]).setItems(periodos) { _, p ->
+                fun add(h: Int, m: Int) {
+                    if (lista.none { it.diaSemana == dia && it.hora == h && it.minuto == m }) lista.add(Horario(dia, h, m))
+                    editarHorarios(lista)
+                }
+                when (p) {
+                    0 -> add(8, 0); 1 -> add(14, 0); 2 -> add(20, 0)
+                    else -> TimePickerDialog(this, { _, h, m -> add(h, m) }, 9, 0, true)
+                        .apply { setOnCancelListener { editarHorarios(lista) } }.show()
+                }
+            }.setOnCancelListener { editarHorarios(lista) }.show()
+        }.setOnCancelListener { editarHorarios(lista) }.show()
     }
 
     private fun escolherData() {
@@ -196,14 +375,19 @@ class MainActivity : Activity() {
     private fun agendarEscolhida() {
         val nome = campoNome.text.toString().trim()
         if (nome.isEmpty()) { toast("Dê um nome para a tarefa"); return }
-        val prazo = prazoEscolhido.timeInMillis
-        if (prazo <= System.currentTimeMillis()) { toast("Esse horário já passou. Escolha outro."); return }
-        criarTarefa(nome, prazo)
-        campoNome.setText("")
+        val agora = System.currentTimeMillis()
+        val prazo = if (repeticaoEscolhida.tipo == Repeticao.Tipo.SEMANAL)
+            repeticaoEscolhida.proximaApos(0, agora) ?: run { toast("Adicione pelo menos um horário"); return }
+        else prazoEscolhido.timeInMillis
+        if (prazo <= agora) { toast("Esse horário já passou. Escolha outro."); return }
+        criarTarefa(nome, prazo, primeiroEmoji(campoEmoji.text.toString()), corEscolhida, repeticaoEscolhida)
+        campoNome.setText(""); campoEmoji.setText("")
+        corEscolhida = 0; desenharCores()
+        repeticaoEscolhida = Repeticao(); atualizarBotoesPrazo()
     }
 
-    private fun criarTarefa(nome: String, prazo: Long) {
-        val t = Tarefa(id = Store.novoId(this), titulo = nome, prazo = prazo)
+    private fun criarTarefa(nome: String, prazo: Long, emoji: String = "", cor: Int = 0, rep: Repeticao = Repeticao()) {
+        val t = Tarefa(id = Store.novoId(this), titulo = nome, prazo = prazo, emoji = emoji, cor = cor, repeticao = rep.codificar())
         Store.salvar(this, t)
         Agendador.agendarPrazo(this, t)
         Vitrine.atualizarTudo(this)
@@ -296,11 +480,19 @@ class MainActivity : Activity() {
                 setPadding(0, px(4), 0, px(4))
             }
             val textos = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            textos.addView(texto(t.titulo, 15f, if (t.aberta) "#1E1B2E" else "#8E89AD"))
+            val nomeView = texto(t.rotulo, 15f, if (t.aberta) "#1E1B2E" else "#8E89AD")
+            if (t.cor != 0) {
+                nomeView.setCompoundDrawablesRelativeWithIntrinsicBounds(GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL; setColor(t.cor); setSize(px(12), px(12))
+                }, null, null, null)
+                nomeView.compoundDrawablePadding = px(8)
+            }
+            textos.addView(nomeView)
             val detalhe = buildString {
                 append(Status.rotulo(t.status)).append(" · ").append(Store.amigavel(t.prazo))
                 if (t.status == Status.ATIVA) append(" · faltam ").append(restanteTexto(t.prazo - agora))
                 if (t.adiamentos > 0) append(" · adiada ${t.adiamentos}x")
+                if (t.regra.repete) append(" · 🔁 ").append(t.regra.descricao())
             }
             textos.addView(texto(detalhe, 12f))
             linha.addView(textos, LinearLayout.LayoutParams(0, -2, 1f))
@@ -313,7 +505,8 @@ class MainActivity : Activity() {
                 Agendador.cancelar(this, t.id)
                 Notificador.cancelar(this, t.id)
                 Store.remover(this, t.id)
-                Store.log(this, "Excluída: \"${t.titulo}\"")
+                Store.log(this, "Excluída: \"${t.rotulo}\"")
+                if (t.regra.repete && t.status == Status.ATIVA) toast("Repetição encerrada: \"${t.rotulo}\" não volta mais")
                 Vitrine.atualizarTudo(this)
                 atualizarTarefas(); atualizarLog()
             })

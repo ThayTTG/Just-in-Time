@@ -26,27 +26,64 @@ object Status {
 data class Tarefa(
     val id: Int,
     var titulo: String,
-    var prazo: Long,            // System.currentTimeMillis() do prazo
+    var prazo: Long,            // System.currentTimeMillis() do prazo (já com adiamentos)
     var status: String = Status.ATIVA,
     var disparouEm: Long = 0L,  // quando o alarme realmente tocou
     var adiamentos: Int = 0,
+    var emoji: String = "",     // opcional
+    var cor: Int = 0,           // 0 = sem cor (a barra mostra a urgência)
+    var repeticao: String = "", // Repeticao.codificar()
+    var serie: Int = id,        // id da primeira tarefa da série de repetições
+    var ancora: Long = prazo,   // primeiro prazo da série (base do cálculo das próximas)
+    var prazoOriginal: Long = prazo, // prazo antes de adiar
 ) {
     val aberta get() = status == Status.ATIVA || status == Status.AGUARDANDO
+    val regra get() = Repeticao.decodificar(repeticao)
+
+    /** Nome como aparece em todo lugar: "🎂 Aniversário da Ana". */
+    val rotulo get() = if (emoji.isBlank()) titulo else "$emoji $titulo"
 
     fun toJson() = JSONObject()
         .put("id", id).put("titulo", titulo).put("prazo", prazo)
         .put("status", status).put("disparouEm", disparouEm).put("adiamentos", adiamentos)
+        .put("emoji", emoji).put("cor", cor).put("repeticao", repeticao)
+        .put("serie", serie).put("ancora", ancora).put("prazoOriginal", prazoOriginal)
 
     companion object {
-        fun fromJson(o: JSONObject) = Tarefa(
-            id = o.getInt("id"),
-            titulo = o.getString("titulo"),
-            prazo = o.getLong("prazo"),
-            status = o.optString("status", Status.ATIVA),
-            disparouEm = o.optLong("disparouEm", 0L),
-            adiamentos = o.optInt("adiamentos", 0),
-        )
+        fun fromJson(o: JSONObject): Tarefa {
+            val id = o.getInt("id")
+            val prazo = o.getLong("prazo")
+            return Tarefa(
+                id = id,
+                titulo = o.getString("titulo"),
+                prazo = prazo,
+                status = o.optString("status", Status.ATIVA),
+                disparouEm = o.optLong("disparouEm", 0L),
+                adiamentos = o.optInt("adiamentos", 0),
+                emoji = o.optString("emoji", ""),
+                cor = o.optInt("cor", 0),
+                repeticao = o.optString("repeticao", ""),
+                serie = o.optInt("serie", id),
+                ancora = o.optLong("ancora", prazo),
+                prazoOriginal = o.optLong("prazoOriginal", prazo),
+            )
+        }
     }
+}
+
+/** Paleta de cores das tarefas. Roxo primeiro. */
+object Paleta {
+    val CORES = listOf(
+        "Roxo" to 0xFF8E5CF7.toInt(),
+        "Lilás" to 0xFFC39BFF.toInt(),
+        "Azul" to 0xFF42A5F5.toInt(),
+        "Verde" to 0xFF43C59E.toInt(),
+        "Amarelo" to 0xFFFFC94A.toInt(),
+        "Laranja" to 0xFFFF8A3D.toInt(),
+        "Rosa" to 0xFFF0629B.toInt(),
+        "Vermelho" to 0xFFEF5350.toInt(),
+    )
+    val EMOJIS = listOf("📚", "💼", "🏠", "🎂", "💊", "🏋️", "🛒", "🎮", "📞", "✈️", "🧹", "💡", "🎓", "❤️", "🐾", "💰")
 }
 
 /**
@@ -107,6 +144,9 @@ object Store {
     /** Para pessoas: "sex., 13/11 às 18:00". */
     fun amigavel(ms: Long): String = fmtAmigavel.format(Date(ms))
     fun data(ms: Long): String = fmtData.format(Date(ms))
+    private val fmtCurto = SimpleDateFormat("EEE dd/MM HH:mm", ptBR)
+    /** Compacto, para widget e bolha: "sex. 20/11 18:00". */
+    fun curto(ms: Long): String = fmtCurto.format(Date(ms))
     fun soHora(ms: Long): String = fmtHora.format(Date(ms))
 
     // ---------- Preferências ----------
@@ -120,6 +160,11 @@ object Store {
     /** Id da tarefa cuja bolha a pessoa fechou (volta a aparecer quando a próxima tarefa mudar). */
     fun bolhaFechadaPara(c: Context) = prefs(c).getInt("bolhaFechada", -1)
     fun fecharBolhaPara(c: Context, id: Int) = prefs(c).edit().putInt("bolhaFechada", id).commit()
+
+    /** Tamanho da bolha: 1.0 = normal; de 0.7 (pequena) a 1.8 (grande). */
+    fun escalaBolha(c: Context) = prefs(c).getFloat("bolhaEscala", 1f)
+    fun salvarEscalaBolha(c: Context, v: Float) =
+        prefs(c).edit().putFloat("bolhaEscala", v.coerceIn(0.7f, 1.8f)).apply()
 
     fun posicaoBolha(c: Context) = Pair(prefs(c).getInt("bolhaX", 24), prefs(c).getInt("bolhaY", 240))
     fun salvarPosicaoBolha(c: Context, x: Int, y: Int) =
