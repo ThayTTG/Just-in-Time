@@ -41,6 +41,7 @@ import com.nokylabs.ui.NokyBadgeKind
 import com.nokylabs.ui.NokyButton
 import com.nokylabs.ui.NokyButtonKind
 import com.nokylabs.ui.NokyCard
+import com.nokylabs.ui.NokyIconButton
 import com.nokylabs.ui.NokyIcons
 import com.nokylabs.ui.NokyNotice
 import com.nokylabs.ui.NokySectionLabel
@@ -74,6 +75,8 @@ fun TelaLista(
     avisoDaVersao: String?,
     aoCriar: () -> Unit,
     aoEditar: (tarefaId: String) -> Unit,
+    aoConfigurar: () -> Unit = {},
+    permissoesFaltando: Int = 0,
 ) {
     val c = NokyTheme.colors
     val t = NokyTheme.type
@@ -90,13 +93,25 @@ fun TelaLista(
         ) {
             item {
                 Column(Modifier.padding(bottom = 8.dp)) {
-                    Text("Just in Time", style = t.h1)
-                    Text(Formatos.dataLonga(agora.date).replaceFirstChar { it.uppercase() }, style = t.secondary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Just in Time", style = t.h1)
+                            Text(Formatos.dataLonga(agora.date).replaceFirstChar { it.uppercase() }, style = t.secondary)
+                        }
+                        NokyIconButton(NokyIcons.Settings, "Configurações", aoConfigurar,
+                            tint = if (permissoesFaltando > 0) c.warning else c.textSecondary)
+                    }
                     Spacer(Modifier.height(14.dp))
                     NokySegmented(listOf("Abertas (${abertas.size})", "Histórico"), aba, { aba = it })
                 }
             }
             if (avisoDaVersao != null) item { NokyNotice(avisoDaVersao, modifier = Modifier.fillMaxWidth()) }
+            if (permissoesFaltando > 0) item {
+                NokyCard(Modifier.fillMaxWidth(), onClick = aoConfigurar) {
+                    Text("⚠️ Falta${if (permissoesFaltando > 1) "m" else ""} $permissoesFaltando permiss${if (permissoesFaltando > 1) "ões" else "ão"}", style = t.h3)
+                    Text("Toque aqui para liberar e garantir que os alarmes toquem na hora.", style = t.secondary)
+                }
+            }
 
             if (aba == 0) {
                 if (abertas.isEmpty()) item { Vazio("Nenhuma tarefa aberta", "Toque em \"Nova tarefa\" para começar.") }

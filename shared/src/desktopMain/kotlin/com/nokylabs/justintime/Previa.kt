@@ -57,13 +57,17 @@ fun exemplos(): Pair<Tarefas, RelogioParado> {
     return t to relogio
 }
 
-@OptIn(InternalComposeUiApi::class, ExperimentalComposeUiApi::class)
 private fun capturar(arquivo: File, dark: Boolean, tela: (Tarefas) -> Tela) {
     val (tarefas, _) = exemplos()
+    capturarConteudo(arquivo) { JustInTimeApp(tarefas, dark = dark, telaInicial = tela(tarefas), tique = false) }
+}
+
+@OptIn(InternalComposeUiApi::class, ExperimentalComposeUiApi::class)
+private fun capturarConteudo(arquivo: File, conteudo: @androidx.compose.runtime.Composable () -> Unit) {
     val escala = 2f
     val (l, a) = 412 to 915
     val cena = ImageComposeScene((l * escala).toInt(), (a * escala).toInt(), Density(escala)) {
-        Box(Modifier.size(l.dp, a.dp)) { JustInTimeApp(tarefas, dark = dark, telaInicial = tela(tarefas), tique = false) }
+        Box(Modifier.size(l.dp, a.dp)) { conteudo() }
     }
     var tempo = 0L
     repeat(15) { cena.render(tempo); tempo += 100_000_000L; Thread.sleep(120) }
@@ -79,6 +83,14 @@ fun main(args: Array<String>) {
     capturar(File(pasta, "lista-claro.png"), false) { Tela.Lista }
     capturar(File(pasta, "editor-escuro.png"), true) { t ->
         Tela.Editor(t.abertasAgora().first { it.tarefa.titulo == "Academia" }.tarefa.id)
+    }
+    capturar(File(pasta, "configuracoes-escuro.png"), true) { Tela.Configuracoes }
+    val (tarefas, _) = exemplos()
+    val pendente = tarefas.abertasAgora().first { it.tarefa.titulo == "Ligar para o banco" }
+    capturarConteudo(File(pasta, "alarme.png")) {
+        com.nokylabs.ui.NokyTheme(accent = com.nokylabs.ui.NokyColors.JustInTime, dark = true) {
+            com.nokylabs.justintime.ui.TelaAlarme(tarefas, pendente, aoTerminar = {})
+        }
     }
     println("Imagens em ${pasta.absolutePath}")
 }

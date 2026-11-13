@@ -8,31 +8,39 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.mutableIntStateOf
 import com.nokylabs.justintime.ui.JustInTimeApp
 
 class MainActivity : ComponentActivity() {
 
-    private val pedirNotificacoes = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    /** Muda toda vez que a pessoa volta para o app: as telas releem permissões e erros. */
+    private val atualizacao = mutableIntStateOf(0)
+
+    private val pedirNotificacoes = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        atualizacao.intValue++
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val plataforma = PlataformaAndroid(this, pedirNotificacoes)
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) pedirNotificacoes.launch(Manifest.permission.POST_NOTIFICATIONS)
 
         setContent {
             JustInTimeApp(
-                tarefas,
-                avisoDaVersao = "Versão de base (0.1.0-alpha.1): tarefas, repetições e alarme com notificação. " +
-                    "Tela de alarme, widget, resumo e bolha voltam na próxima etapa. Até lá, o protótipo continua instalado.",
+                tarefas, plataforma, atualizacao.intValue,
+                avisoDaVersao = "Versão 0.2.0: alarme completo, avisos, horário silencioso e resumo do dia. " +
+                    "Widget, resumo nas notificações e bolha chegam na 0.3.0.",
             )
         }
     }
 
     override fun onResume() {
         super.onResume()
-        // Confere se algum prazo passou com o app fechado e refaz os alarmes
-        tarefas.reconciliar()
+        // Confere se algum prazo passou com o app fechado, refaz os alarmes e relê permissões/erros
+        Erros.proteger(this, "Reagendar ao abrir") { tarefas.reconciliar() }
+        atualizacao.intValue++
     }
 }

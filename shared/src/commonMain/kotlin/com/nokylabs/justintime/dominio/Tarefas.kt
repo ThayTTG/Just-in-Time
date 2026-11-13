@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
@@ -53,6 +54,37 @@ class Tarefas(
 ) {
     private val qt get() = db.tarefaQueries
     private val qo get() = db.ocorrenciaQueries
+    private val qp get() = db.preferenciaQueries
+
+    // ---------------- Preferências ----------------
+
+    fun config(): Config {
+        fun ler(chave: String) = qp.ler(chave).executeAsOneOrNull()
+        fun hora(chave: String, padrao: LocalTime) = ler(chave)?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: padrao
+        val p = Config()
+        return Config(
+            silencioAtivo = ler("silencio.ativo")?.toBoolean() ?: p.silencioAtivo,
+            silencioInicio = hora("silencio.inicio", p.silencioInicio),
+            silencioFim = hora("silencio.fim", p.silencioFim),
+            resumoDoDiaAtivo = ler("resumo.ativo")?.toBoolean() ?: p.resumoDoDiaAtivo,
+            resumoDoDia = hora("resumo.hora", p.resumoDoDia),
+        )
+    }
+
+    fun salvarConfig(c: Config) {
+        db.transaction {
+            qp.gravar("silencio.ativo", c.silencioAtivo.toString())
+            qp.gravar("silencio.inicio", c.silencioInicio.toString())
+            qp.gravar("silencio.fim", c.silencioFim.toString())
+            qp.gravar("resumo.ativo", c.resumoDoDiaAtivo.toString())
+            qp.gravar("resumo.hora", c.resumoDoDia.toString())
+        }
+        agendador.vitrineMudou() // os lembretes mudam de horário
+    }
+
+    /** Preferência livre de cada plataforma (ex.: tamanho da bolha). */
+    fun preferencia(chave: String): String? = qp.ler(chave).executeAsOneOrNull()
+    fun gravarPreferencia(chave: String, valor: String) = qp.gravar(chave, valor)
 
     fun agoraLocal(): LocalDateTime = relogio.agora().toLocalDateTime(relogio.fuso)
     fun instante(l: LocalDateTime): Instant = l.toInstant(relogio.fuso)
@@ -177,9 +209,12 @@ class Tarefas(
         agendador.vitrineMudou()
     }
 
+    /** Hora local daqui a [segundos]. */
+    fun daquiA(segundos: Long): LocalDateTime =
+        Instant.fromEpochMilliseconds(relogio.agora().toEpochMilliseconds() + segundos * 1000).toLocalDateTime(relogio.fuso)
+
     /** Adia para daqui a [segundos] (botões "+15 min", "+1 h"). */
-    fun adiarEm(ocorrenciaId: String, segundos: Long) =
-        adiar(ocorrenciaId, Instant.fromEpochMilliseconds(relogio.agora().toEpochMilliseconds() + segundos * 1000).toLocalDateTime(relogio.fuso))
+    fun adiarEm(ocorrenciaId: String, segundos: Long) = adiar(ocorrenciaId, daquiA(segundos))
 
     /**
      * O alarme tocou. A ocorrência passa a aguardar resposta e, se a tarefa repete, a próxima

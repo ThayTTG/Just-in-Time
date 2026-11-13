@@ -4,21 +4,20 @@ App de tarefas com prazo da **NokyLabs**: você coloca o que precisa ser feito e
 
 Android primeiro; Windows e Linux depois, com o mesmo código de regras e telas (Kotlin Multiplatform + Compose).
 
-| Lista | Editar |
-|---|---|
-| ![Lista de tarefas](capturas/lista-escuro.png) | ![Editar tarefa](capturas/editor-escuro.png) |
+| Lista | Editar | Alarme | Configurações |
+|---|---|---|---|
+| ![Lista de tarefas](capturas/lista-escuro.png) | ![Editar tarefa](capturas/editor-escuro.png) | ![Tela de alarme](capturas/alarme.png) | ![Configurações](capturas/configuracoes-escuro.png) |
 
 ## Status
 
-**0.1.0-alpha.1: a base.**
-- Tarefas com emoji, cor, prazo com horário exato ou de dia inteiro, e repetição: todo dia, toda semana, a cada 15 dias, todo mês, todo ano, a cada N, ou dias e horários específicos.
+**0.2.0-alpha.1**
+- Tarefas com emoji, cor, prazo com horário exato ou de dia inteiro, e repetições: todo dia, toda semana, a cada 15 dias, todo mês, todo ano, a cada N, ou dias e horários específicos.
 - A próxima tarefa aparece em destaque, com contagem regressiva.
-- As tarefas que estão aguardando resposta podem ser respondidas na própria lista: Feito, Não feito (com motivo opcional) ou Adiar.
-- Histórico.
-- Aviso quando já existe uma tarefa com o mesmo nome ou no mesmo horário.
-- Alarme exato com notificação (Feito / Não feito / Adiar). Os alarmes são refeitos quando o celular liga ou a hora muda.
+- Responder na lista ou na tela de alarme. Histórico. Aviso quando já existe uma tarefa com o mesmo nome ou horário.
+- Alarme exato com tela de alarme (no bloqueio e com o celular em uso), som que silencia em 60 s, avisos antes do prazo, horário silencioso, resumo do dia.
+- Configurações com as permissões e relatório de bugs.
 
-**Próxima etapa:** trazer do protótipo a tela de alarme por cima de tudo, o silenciar depois de 60 s, o widget, a notificação-resumo, a bolha flutuante, o horário silencioso, o resumo do dia, o assistente de permissões e o relatório de bugs.
+**Próxima etapa (0.3.0):** widget com contagem regressiva, notificação-resumo e bolha flutuante.
 
 ## Como compilar
 
@@ -42,8 +41,9 @@ Para atualizar o kit visual: `git submodule update --remote lib/NokyLabs.UI`.
 shared/          regras, banco de dados e telas (Android + PC)
   dominio/       Tarefa, Ocorrencia, Repeticao e Tarefas (todas as regras)
   dados/         tabelas SQLDelight (.sq)
-  ui/            telas em Compose com o NokyLabs.UI
-androidApp/      o app Android: alarmes, notificações (e, em breve, widget e bolha)
+  dominio/Lembretes.kt   avisos, horário silencioso e resumo do dia
+  ui/            telas em Compose com o NokyLabs.UI (lista, editor, alarme, configurações)
+androidApp/      o app Android: alarmes, notificações, permissões, relatório de bugs (em breve, widget e bolha)
 lib/NokyLabs.UI  kit visual (submodule)
 prototipo/       o protótipo de testes (v0.0.1 a v0.0.4), guardado como referência
 ```
