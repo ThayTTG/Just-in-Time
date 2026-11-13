@@ -229,15 +229,42 @@ class Tarefas(
     }
 
     fun responder(ocorrenciaId: String, feita: Boolean, motivo: Motivo? = null) {
-        val o = qo.porId(ocorrenciaId).executeAsOneOrNull() ?: return
+        val antes = item(ocorrenciaId) ?: return
         val status = if (feita) Status.FEITA else Status.NAO_FEITA
-        qo.responder(status.name, if (feita) null else motivo?.name, relogio.agora().toEpochMilliseconds(), o.id)
-        agendador.cancelar(o.id)
+        qo.responder(status.name, if (feita) null else motivo?.name, relogio.agora().toEpochMilliseconds(), antes.ocorrencia.id)
+        agendador.cancelar(antes.ocorrencia.id)
+        // Finalizada antes do prazo: o alarme não vai tocar, então a próxima da série nasce agora
+        if (antes.status == Status.ATIVA) gerarProxima(antes)
         agendador.vitrineMudou()
     }
 
+    /** Botão "Finalizar": entrega antes do prazo. */
+    fun finalizar(ocorrenciaId: String) = responder(ocorrenciaId, feita = true)
+
+    /**
+     * Botão "Ajustar": muda o prazo só desta vez, para antes ou depois do marcado.
+     * A repetição continua presa ao horário original. Só conta como adiamento se for para depois.
+     */
+    fun ajustar(ocorrenciaId: String, novoPrazo: LocalDateTime) {
+        val atual = item(ocorrenciaId) ?: return
+        validarNovoPrazo(novoPrazo)
+        if (novoPrazo == atual.prazo && atual.status == Status.ATIVA) return
+        qo.ajustar(novoPrazo.toString(), if (novoPrazo > atual.prazo) 1L else 0L, ocorrenciaId)
+        val item = item(ocorrenciaId) ?: return
+        agendador.agendar(item, instante(novoPrazo))
+        agendador.vitrineMudou()
+    }
+
+    /** Null se [novoPrazo] serve; senão, a frase para mostrar na tela. */
+    fun problemaNoPrazo(novoPrazo: LocalDateTime): String? =
+        if (novoPrazo <= agoraLocal()) "Esse horário já passou. Escolha outro." else null
+
+    private fun validarNovoPrazo(novoPrazo: LocalDateTime) {
+        problemaNoPrazo(novoPrazo)?.let { throw RegraViolada(it) }
+    }
+
     fun adiar(ocorrenciaId: String, novoPrazo: LocalDateTime) {
-        if (novoPrazo <= agoraLocal()) throw RegraViolada("Esse horário já passou. Escolha outro.")
+        validarNovoPrazo(novoPrazo)
         qo.adiar(novoPrazo.toString(), ocorrenciaId)
         val item = item(ocorrenciaId) ?: return
         agendador.agendar(item, instante(novoPrazo))

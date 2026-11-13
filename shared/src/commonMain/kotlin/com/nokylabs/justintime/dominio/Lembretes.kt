@@ -136,3 +136,19 @@ class Lembretes(private val tarefas: Tarefas) {
         return if (hoje > depoisDe) hoje else LocalDateTime(depoisDe.date.plus(1, DateTimeUnit.DAY), hora)
     }
 }
+
+/** "15 min", "1 h 30 min", "2 h", "1 dia", "1 dia e 6 h", "3 dias". */
+fun minutosPorExtenso(min: Int): String {
+    val dias = min / 1440
+    val horas = (min % 1440) / 60
+    val minutos = min % 60
+    fun d(n: Int) = "$n dia${if (n > 1) "s" else ""}"
+    return when {
+        min <= 0 -> "na hora"
+        dias > 0 && horas == 0 && minutos == 0 -> d(dias)
+        dias > 0 && minutos == 0 -> "${d(dias)} e $horas h"
+        min >= 60 && minutos == 0 -> "${min / 60} h"
+        min > 60 -> "${min / 60} h $minutos min"
+        else -> "$min min"
+    }
+}

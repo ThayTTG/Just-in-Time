@@ -162,6 +162,11 @@ fun TelaConfiguracoes(
                         tarefas.criar(DadosTarefa("Teste de alarme", "🔔", prazo = tarefas.daquiA(30)))
                         mensagem = "Alarme de teste em 30 segundos. Pode bloquear o celular!"
                     }, kind = NokyButtonKind.Soft, icon = NokyIcons.Clock)
+                    NokyButton("Testar aviso (1 min)", {
+                        // Uma tarefa de verdade para daqui a 2 min com aviso 1 min antes: testa o caminho inteiro
+                        tarefas.criar(DadosTarefa("Teste de aviso", "⏰", prazo = tarefas.daquiA(120), avisos = listOf(1)))
+                        mensagem = "O aviso deve aparecer flutuando em 1 minuto. Depois é só tocar em Finalizar na tarefa de teste."
+                    }, kind = NokyButtonKind.Soft, icon = NokyIcons.Alert)
                     NokyButton("Reportar bug", { plataforma.reportar(montarRelatorio(plataforma, tarefas)) },
                         kind = NokyButtonKind.Secondary, icon = NokyIcons.External)
                     NokyButton("Simular erro", { plataforma.simularErro() }, kind = NokyButtonKind.Ghost)

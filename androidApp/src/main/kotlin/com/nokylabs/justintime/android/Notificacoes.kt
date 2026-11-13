@@ -13,12 +13,19 @@ import com.nokylabs.justintime.dominio.Aviso
 import com.nokylabs.justintime.dominio.Item
 import com.nokylabs.justintime.dominio.Toque
 import com.nokylabs.justintime.dominio.formatado
+import com.nokylabs.justintime.dominio.minutosPorExtenso
 
 /** Canais e notificações do app. */
 object Notificacoes {
     const val CANAL_ALARME = "alarmes"
     const val CANAL_SILENCIOSO = "silencioso"
-    const val CANAL_AVISOS = "avisos"
+    /**
+     * "Faltam 30 min". Precisa de importância ALTA para aparecer flutuando (pop-up);
+     * a importância de um canal não muda depois de criado, por isso é um canal novo (0.5.0).
+     */
+    const val CANAL_AVISOS = "avisos_antes"
+    /** Resumo do dia e pendências: o antigo canal "avisos", que continua discreto. */
+    const val CANAL_RESUMOS = "avisos"
     const val CANAL_ERROS = "erros"
     private const val ID_RESUMO_DO_DIA = 1_000_001
     private const val ID_PENDENTES = 1_000_002
@@ -38,8 +45,13 @@ object Notificacoes {
                 vibrationPattern = longArrayOf(0, 600, 400, 600)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             },
-            NotificationChannel(CANAL_AVISOS, "Avisos e resumo do dia", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "\"Faltam 15 min\", resumo do dia e tarefas pendentes"
+            NotificationChannel(CANAL_AVISOS, "Avisos antes do prazo", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "\"Faltam 30 min\": aparece por cima da tela, com som"
+                enableVibration(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            },
+            NotificationChannel(CANAL_RESUMOS, "Resumo do dia e pendências", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Tarefas de dia inteiro que faltam e as que aguardam resposta"
             },
             NotificationChannel(CANAL_SILENCIOSO, "Sem som (horário silencioso)", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "Prazos e avisos que chegam no horário silencioso"
@@ -100,7 +112,11 @@ object Notificacoes {
 
     /** Avisos (faltam X), resumo do dia e pendências de quando o silêncio acaba. */
     fun mostrarAviso(c: Context, aviso: Aviso) {
-        val canal = if (aviso.silencioso) CANAL_SILENCIOSO else CANAL_AVISOS
+        val canal = when {
+            aviso.silencioso -> CANAL_SILENCIOSO
+            aviso is Aviso.FaltaPouco -> CANAL_AVISOS
+            else -> CANAL_RESUMOS
+        }
         val b = Notification.Builder(c, canal)
             .setSmallIcon(R.drawable.ic_notificacao)
             .setColor(COR_APP)
@@ -109,8 +125,10 @@ object Notificacoes {
         val id = when (aviso) {
             is Aviso.FaltaPouco -> {
                 b.setContentTitle(aviso.item.rotulo)
-                    .setContentText("Faltam ${tempo(aviso.minutosAntes)} · prazo às ${aviso.item.prazo.time.formatado()}")
+                    .setContentText("Faltam ${minutosPorExtenso(aviso.minutosAntes)} · prazo às ${aviso.item.prazo.time.formatado()}")
                     .setColor(if (aviso.item.tarefa.cor != 0) aviso.item.tarefa.cor else COR_APP)
+                    .setCategory(Notification.CATEGORY_REMINDER)
+                    .setVisibility(Notification.VISIBILITY_PUBLIC)
                 idDe(aviso.item.ocorrencia.id) + 7
             }
             is Aviso.ResumoDoDia -> {
@@ -127,12 +145,6 @@ object Notificacoes {
             }
         }
         nm(c).notify(id, b.build())
-    }
-
-    private fun tempo(min: Int) = when {
-        min >= 1440 && min % 1440 == 0 -> "${min / 1440} dia${if (min >= 2880) "s" else ""}"
-        min >= 60 && min % 60 == 0 -> "${min / 60} h"
-        else -> "$min min"
     }
 
     fun cancelar(c: Context, ocorrenciaId: String) {

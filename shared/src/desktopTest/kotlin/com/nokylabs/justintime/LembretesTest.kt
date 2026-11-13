@@ -109,4 +109,9 @@ class LembretesTest {
         val r = Lembrete(TipoLembrete.RESUMO_DO_DIA, t("2026-11-13T20:30"))
         assertEquals(r, Lembrete.daChave(r.chave))
     }
+
+    @Test fun minutos_por_extenso() {
+        assertEquals(listOf("15 min", "30 min", "1 h", "1 h 30 min", "2 h", "1 dia", "1 dia e 6 h", "3 dias", "25 h 5 min"),
+            listOf(15, 30, 60, 90, 120, 1440, 1800, 4320, 1505).map { com.nokylabs.justintime.dominio.minutosPorExtenso(it) })
+    }
 }

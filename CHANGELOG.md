@@ -1,5 +1,22 @@
 # Changelog — Just in Time
 
+## 0.5.0-alpha.1 — 13/11/2026
+- **Finalizar** (entregar antes do prazo): botão em cada tarefa aberta, com uma confirmação rápida ali
+  mesmo. Conta como entregue no contador. Se a tarefa repete, a próxima já fica agendada.
+- **Ajustar**: muda o prazo só desta vez, para mais cedo ou mais tarde. Horário que já passou é recusado
+  (o botão Salvar só libera com um horário válido). Só conta como "adiada" se for para depois; a repetição
+  continua no horário de sempre.
+- **Formulário em blocos**: cada parte da nova tarefa (nome, cor, prazo, repetição, avisos, silêncio)
+  fica no seu próprio cartão. O calendário não deixa escolher dias passados e o aviso de "horário já
+  passou" aparece na hora, antes de salvar.
+- **Aviso antes do prazo personalizado** (ideia da mãe da Taynara): além de 1 dia, 1 h e 15 min, o
+  "+ Outro" aceita qualquer valor em minutos, horas ou dias (ex.: 30 min).
+- **Correção: o aviso antes do prazo não aparecia flutuando.** O canal era de prioridade normal, que
+  não faz pop-up nos Samsung. Agora há um canal próprio, "Avisos antes do prazo", com prioridade alta.
+  O resumo do dia e as pendências seguem num canal discreto.
+- Configurações → Diagnóstico: **Testar aviso (1 min)**.
+- 41 testes automáticos (novos: finalizar, ajustar, validação e texto dos avisos).
+
 ## 0.4.0-alpha.1 — 13/11/2026
 **Contador de entregas** (ideia da Taynara): uma recompensa em números pelo que foi entregue.
 - Cartão no topo da lista: **entregues**, **não entregues** e **pela frente**, com **Hoje** ou

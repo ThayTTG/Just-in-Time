@@ -58,6 +58,9 @@ UPDATE ocorrencia SET status = ?, motivo = ?, respondida_em = ? WHERE id = ?;
 adiar:
 UPDATE ocorrencia SET prazo = ?, status = 'ATIVA', adiamentos = adiamentos + 1 WHERE id = ?;
 
+ajustar:
+UPDATE ocorrencia SET prazo = ?, status = 'ATIVA', adiamentos = adiamentos + ? WHERE id = ?;
+
 reprogramar:
 UPDATE ocorrencia SET prazo = ?, prazo_original = ?, status = 'ATIVA', disparou_em = NULL WHERE id = ?;
 

@@ -4,13 +4,13 @@ App de tarefas com prazo da **NokyLabs**: você coloca o que precisa ser feito e
 
 Android primeiro; Windows e Linux depois, com o mesmo código de regras e telas (Kotlin Multiplatform + Compose).
 
-| Lista | Editar | Alarme | Configurações |
-|---|---|---|---|
-| ![Lista de tarefas](capturas/lista-escuro.png) | ![Editar tarefa](capturas/editor-escuro.png) | ![Tela de alarme](capturas/alarme.png) | ![Configurações](capturas/configuracoes-escuro.png) |
+| Lista | Editar | Ajustar | Alarme | Configurações |
+|---|---|---|---|---|
+| ![Lista de tarefas](capturas/lista-escuro.png) | ![Editar tarefa](capturas/editor-escuro.png) | ![Ajustar o prazo](capturas/ajustar.png) | ![Tela de alarme](capturas/alarme.png) | ![Configurações](capturas/configuracoes-escuro.png) |
 
 ## Status
 
-**0.4.0-alpha.1**
+**0.5.0-alpha.1**
 - Tarefas com emoji, cor, prazo com horário exato ou de dia inteiro, e repetições: todo dia, toda semana, a cada 15 dias, todo mês, todo ano, a cada N, ou dias e horários específicos.
 - A próxima tarefa aparece em destaque, com contagem regressiva.
 - Responder na lista ou na tela de alarme. Histórico. Aviso quando já existe uma tarefa com o mesmo nome ou horário.
@@ -18,6 +18,8 @@ Android primeiro; Windows e Linux depois, com o mesmo código de regras e telas 
 - Configurações com as permissões e relatório de bugs.
 - Widget com contagem regressiva, resumo nas notificações e bolha flutuante redimensionável.
 - Contador de entregas (entregues × não entregues, hoje ou na semana) com 🔥 sequência de dias, no app e no widget.
+- Finalizar antes do prazo e Ajustar o prazo (mais cedo ou mais tarde, sem aceitar horário que já passou).
+- Avisos antes do prazo com valor livre (ex.: 30 min, 2 h, 3 dias), aparecendo flutuando na tela.
 
 Próximos passos no [ROADMAP](ROADMAP.md).
 

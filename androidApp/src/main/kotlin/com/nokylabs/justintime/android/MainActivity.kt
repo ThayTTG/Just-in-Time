@@ -43,8 +43,8 @@ class MainActivity : ComponentActivity() {
             JustInTimeApp(
                 tarefas, plataforma, atualizacao.intValue,
                 telaPedida = telaPedida, pedido = pedido.intValue,
-                avisoDaVersao = "Versão 0.4.0: contador de entregas no topo e no widget. " +
-                    "Troque entre Hoje e Semana no cartão.",
+                avisoDaVersao = "Versão 0.5.0: Finalizar e Ajustar em cada tarefa, aviso antes do prazo com o tempo " +
+                    "que você quiser (ex.: 30 min) e o aviso agora aparece flutuando na tela.",
             )
         }
     }

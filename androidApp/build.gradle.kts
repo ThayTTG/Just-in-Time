@@ -12,8 +12,8 @@ android {
         applicationId = "com.nokylabs.justintime"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.4.0-alpha.1"
+        versionCode = 5
+        versionName = "0.5.0-alpha.1"
     }
 
     // Chave de teste fixa (a mesma em qualquer PC): o celular atualiza sem desinstalar.
