@@ -1,0 +1,35 @@
+-- Tarefas: o que a pessoa criou, com a regra de repetição.
+CREATE TABLE tarefa (
+    id TEXT NOT NULL PRIMARY KEY,           -- UUID: facilita a integração futura com o PlaningThings
+    titulo TEXT NOT NULL,
+    emoji TEXT NOT NULL DEFAULT '',
+    cor INTEGER NOT NULL DEFAULT 0,         -- 0 = sem cor
+    tipo_prazo TEXT NOT NULL,               -- EXATO ou DIA_INTEIRO
+    ancora TEXT NOT NULL,                   -- primeiro prazo da série, hora local ISO (2026-11-14T20:00)
+    repeticao TEXT NOT NULL DEFAULT '',     -- Repeticao.codificar()
+    avisos TEXT NOT NULL DEFAULT '',        -- minutos antes do prazo, separados por vírgula ("60,15")
+    tocar_no_silencio INTEGER NOT NULL DEFAULT 0,
+    arquivada INTEGER NOT NULL DEFAULT 0,   -- encerrada sem apagar o histórico
+    criada_em INTEGER NOT NULL,
+    atualizada_em INTEGER NOT NULL
+);
+
+inserir:
+INSERT INTO tarefa VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+atualizar:
+UPDATE tarefa SET titulo = ?, emoji = ?, cor = ?, tipo_prazo = ?, ancora = ?, repeticao = ?, avisos = ?,
+    tocar_no_silencio = ?, atualizada_em = ?
+WHERE id = ?;
+
+arquivar:
+UPDATE tarefa SET arquivada = 1, atualizada_em = ? WHERE id = ?;
+
+porId:
+SELECT * FROM tarefa WHERE id = ?;
+
+todas:
+SELECT * FROM tarefa;
+
+apagar:
+DELETE FROM tarefa WHERE id = ?;

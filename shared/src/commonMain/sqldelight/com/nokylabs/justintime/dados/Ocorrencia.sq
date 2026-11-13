@@ -1,0 +1,58 @@
+-- Ocorrências: cada vez que uma tarefa vence. É aqui que fica a resposta (feita ou não).
+CREATE TABLE ocorrencia (
+    id TEXT NOT NULL PRIMARY KEY,
+    tarefa_id TEXT NOT NULL REFERENCES tarefa(id) ON DELETE CASCADE,
+    prazo_original TEXT NOT NULL,           -- calculado pela repetição
+    prazo TEXT NOT NULL,                    -- prazo atual, já com adiamentos
+    status TEXT NOT NULL,                   -- ATIVA, AGUARDANDO, FEITA ou NAO_FEITA
+    adiamentos INTEGER NOT NULL DEFAULT 0,
+    motivo TEXT,                            -- motivo de "não feito" (opcional)
+    disparou_em INTEGER,                    -- quando o alarme tocou (para medir atraso)
+    respondida_em INTEGER
+);
+
+CREATE INDEX ocorrencia_status ON ocorrencia(status, prazo);
+CREATE INDEX ocorrencia_tarefa ON ocorrencia(tarefa_id);
+
+inserir:
+INSERT INTO ocorrencia VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+porId:
+SELECT * FROM ocorrencia WHERE id = ?;
+
+-- Abertas: "aguardando resposta" primeiro, depois pelo prazo mais próximo
+abertas:
+SELECT * FROM ocorrencia
+WHERE status IN ('ATIVA', 'AGUARDANDO')
+ORDER BY CASE status WHEN 'AGUARDANDO' THEN 0 ELSE 1 END, prazo;
+
+-- Respondidas, da mais recente para a mais antiga
+historico:
+SELECT * FROM ocorrencia
+WHERE status IN ('FEITA', 'NAO_FEITA')
+ORDER BY prazo DESC
+LIMIT ?;
+
+daTarefa:
+SELECT * FROM ocorrencia WHERE tarefa_id = ? ORDER BY prazo;
+
+existe:
+SELECT COUNT(*) FROM ocorrencia WHERE tarefa_id = ? AND prazo_original = ?;
+
+mudarStatus:
+UPDATE ocorrencia SET status = ?, disparou_em = coalesce(?, disparou_em) WHERE id = ?;
+
+responder:
+UPDATE ocorrencia SET status = ?, motivo = ?, respondida_em = ? WHERE id = ?;
+
+adiar:
+UPDATE ocorrencia SET prazo = ?, status = 'ATIVA', adiamentos = adiamentos + 1 WHERE id = ?;
+
+reprogramar:
+UPDATE ocorrencia SET prazo = ?, prazo_original = ?, status = 'ATIVA', disparou_em = NULL WHERE id = ?;
+
+apagar:
+DELETE FROM ocorrencia WHERE id = ?;
+
+apagarAbertasDaTarefa:
+DELETE FROM ocorrencia WHERE tarefa_id = ? AND status IN ('ATIVA', 'AGUARDANDO') AND id != ?;
