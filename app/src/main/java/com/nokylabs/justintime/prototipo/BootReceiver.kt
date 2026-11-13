@@ -15,7 +15,9 @@ class BootReceiver : BroadcastReceiver() {
             "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" -> "permissão de alarme mudou"
             else -> return
         }
-        Notificador.criarCanais(c)
-        Agendador.reagendarTudo(c, motivo)
+        Relatorio.proteger(c, "BootReceiver: $motivo") {
+            Notificador.criarCanais(c)
+            Agendador.reagendarTudo(c, motivo)
+        }
     }
 }

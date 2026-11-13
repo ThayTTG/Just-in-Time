@@ -96,8 +96,49 @@ object Store {
 
     // ---------- Log de diagnóstico ----------
 
-    private val fmt = SimpleDateFormat("dd/MM HH:mm:ss", Locale("pt", "BR"))
+    private val ptBR = Locale("pt", "BR")
+    private val fmt = SimpleDateFormat("dd/MM HH:mm:ss", ptBR)
+    private val fmtAmigavel = SimpleDateFormat("EEE, dd/MM 'às' HH:mm", ptBR)
+    private val fmtData = SimpleDateFormat("EEE, dd/MM/yyyy", ptBR)
+    private val fmtHora = SimpleDateFormat("HH:mm", ptBR)
+
+    /** Com segundos, para o log de diagnóstico. */
     fun hora(ms: Long): String = fmt.format(Date(ms))
+    /** Para pessoas: "sex., 13/11 às 18:00". */
+    fun amigavel(ms: Long): String = fmtAmigavel.format(Date(ms))
+    fun data(ms: Long): String = fmtData.format(Date(ms))
+    fun soHora(ms: Long): String = fmtHora.format(Date(ms))
+
+    // ---------- Preferências ----------
+
+    fun resumoAtivo(c: Context) = prefs(c).getBoolean("resumo", true)
+    fun definirResumo(c: Context, v: Boolean) = prefs(c).edit().putBoolean("resumo", v).commit()
+
+    fun bolhaAtiva(c: Context) = prefs(c).getBoolean("bolha", true)
+    fun definirBolha(c: Context, v: Boolean) = prefs(c).edit().putBoolean("bolha", v).commit()
+
+    /** Id da tarefa cuja bolha a pessoa fechou (volta a aparecer quando a próxima tarefa mudar). */
+    fun bolhaFechadaPara(c: Context) = prefs(c).getInt("bolhaFechada", -1)
+    fun fecharBolhaPara(c: Context, id: Int) = prefs(c).edit().putInt("bolhaFechada", id).commit()
+
+    fun posicaoBolha(c: Context) = Pair(prefs(c).getInt("bolhaX", 24), prefs(c).getInt("bolhaY", 240))
+    fun salvarPosicaoBolha(c: Context, x: Int, y: Int) =
+        prefs(c).edit().putInt("bolhaX", x).putInt("bolhaY", y).apply()
+
+    // ---------- Relatório de erros ----------
+
+    fun errosPendentes(c: Context): List<String> {
+        val arr = JSONArray(prefs(c).getString("erros", "[]"))
+        return List(arr.length()) { arr.getString(it) }
+    }
+
+    fun adicionarErro(c: Context, texto: String) {
+        val arr = JSONArray(prefs(c).getString("erros", "[]"))
+        if (arr.length() < 10) arr.put(texto) // guarda no máximo 10 até serem reportados
+        prefs(c).edit().putString("erros", arr.toString()).commit()
+    }
+
+    fun limparErros(c: Context) = prefs(c).edit().putString("erros", "[]").commit()
 
     fun log(c: Context, msg: String) {
         val arr = JSONArray(prefs(c).getString("log", "[]"))

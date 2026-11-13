@@ -10,111 +10,129 @@ import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
 
-/**
- * Widget com contagem regressiva.
- *
- * O segredo: o Chronometer em modo regressivo é desenhado pelo próprio launcher e
- * conta sozinho. O app só "acorda" para trocar cores/estados, nunca a cada segundo.
- */
+/** O widget da tela inicial. Toda a lógica de desenho está na Vitrine. */
 class DeadlineWidget : AppWidgetProvider() {
 
-    override fun onUpdate(c: Context, mgr: AppWidgetManager, ids: IntArray) = atualizarTodos(c)
+    override fun onUpdate(c: Context, mgr: AppWidgetManager, ids: IntArray) =
+        Relatorio.proteger(c, "Widget: onUpdate") { Vitrine.atualizarTudo(c) }
 
-    override fun onEnabled(c: Context) = atualizarTodos(c)
+    override fun onEnabled(c: Context) =
+        Relatorio.proteger(c, "Widget: onEnabled") { Vitrine.atualizarTudo(c) }
 
     companion object {
-        private const val UMA_HORA = 3_600_000L
-        private const val UM_DIA = 24 * UMA_HORA
+        /** Mantido por compatibilidade com o resto do código. */
+        fun atualizarTodos(c: Context) = Vitrine.atualizarTudo(c)
+    }
+}
 
-        private const val COR_NEUTRA = 0xFF8E89AD.toInt()
-        private const val COR_ATENCAO = 0xFFF9A825.toInt()
-        private const val COR_CRITICA = 0xFFE53935.toInt()
-        private const val COR_RESPONDER = 0xFFB388FF.toInt()
-        private const val COR_TEXTO = 0xFFFFFFFF.toInt()
+/** Ids de uma linha (barra colorida, nome, cronômetro, texto). */
+class IdsLinha(val linha: Int, val barra: Int, val nome: Int, val crono: Int, val info: Int)
 
-        private val LINHAS = intArrayOf(R.id.linha1, R.id.linha2, R.id.linha3)
-        private val BARRAS = intArrayOf(R.id.barra1, R.id.barra2, R.id.barra3)
-        private val NOMES = intArrayOf(R.id.nome1, R.id.nome2, R.id.nome3)
-        private val CRONOS = intArrayOf(R.id.crono1, R.id.crono2, R.id.crono3)
-        private val INFOS = intArrayOf(R.id.info1, R.id.info2, R.id.info3)
+/**
+ * "Vitrine": tudo o que mostra as tarefas fora do app — widget, notificação-resumo e bolha.
+ * Uma única função atualiza os três, para eles nunca discordarem entre si.
+ */
+object Vitrine {
+    const val UMA_HORA = 3_600_000L
+    const val UM_DIA = 24 * UMA_HORA
 
-        fun atualizarTodos(c: Context) {
-            val agora = System.currentTimeMillis()
-            val tarefas = Store.abertasOrdenadas(c)
+    const val COR_NEUTRA = 0xFF8E89AD.toInt()
+    const val COR_ATENCAO = 0xFFF9A825.toInt()
+    const val COR_CRITICA = 0xFFE53935.toInt()
+    const val COR_RESPONDER = 0xFFB388FF.toInt()
+    const val COR_RESPONDER_ESCURA = 0xFF6A3FD0.toInt() // legível em fundo claro
+    const val COR_BRANCA = 0xFFFFFFFF.toInt()
 
-            // Próximo momento em que alguma tarefa muda de cor (24 h ou 1 h antes do prazo)
-            val proximaMudanca = tarefas
-                .filter { it.status == Status.ATIVA }
-                .flatMap { listOf(it.prazo - UM_DIA, it.prazo - UMA_HORA) }
-                .filter { it > agora }
-                .minOrNull()
-            Agendador.agendarAtualizacaoWidget(c, proximaMudanca)
+    private val LINHAS_WIDGET = listOf(
+        IdsLinha(R.id.linha1, R.id.barra1, R.id.nome1, R.id.crono1, R.id.info1),
+        IdsLinha(R.id.linha2, R.id.barra2, R.id.nome2, R.id.crono2, R.id.info2),
+        IdsLinha(R.id.linha3, R.id.barra3, R.id.nome3, R.id.crono3, R.id.info3),
+    )
 
-            val mgr = AppWidgetManager.getInstance(c)
-            val ids = mgr.getAppWidgetIds(ComponentName(c, DeadlineWidget::class.java))
-            if (ids.isEmpty()) return
-            mgr.updateAppWidget(ids, montar(c, tarefas, agora))
+    fun atualizarTudo(c: Context) {
+        val agora = System.currentTimeMillis()
+        val tarefas = Store.abertasOrdenadas(c)
+
+        // Próximo momento em que alguma tarefa muda de cor (24 h ou 1 h antes do prazo)
+        val proximaMudanca = tarefas
+            .filter { it.status == Status.ATIVA }
+            .flatMap { listOf(it.prazo - UM_DIA, it.prazo - UMA_HORA) }
+            .filter { it > agora }
+            .minOrNull()
+        Agendador.agendarAtualizacaoWidget(c, proximaMudanca)
+
+        Relatorio.proteger(c, "Atualizar widget") { atualizarWidget(c, tarefas, agora) }
+        Relatorio.proteger(c, "Atualizar resumo") { Notificador.atualizarResumo(c, tarefas, agora) }
+        Relatorio.proteger(c, "Atualizar bolha") { BolhaService.sincronizar(c, tarefas) }
+    }
+
+    private fun atualizarWidget(c: Context, tarefas: List<Tarefa>, agora: Long) {
+        val mgr = AppWidgetManager.getInstance(c)
+        val ids = mgr.getAppWidgetIds(ComponentName(c, DeadlineWidget::class.java))
+        if (ids.isEmpty()) return
+        val rv = RemoteViews(c.packageName, R.layout.widget_prazo)
+        val abrirApp = PendingIntent.getActivity(
+            c, 1, Intent(c, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        rv.setOnClickPendingIntent(R.id.raiz, abrirApp)
+        rv.setOnClickPendingIntent(R.id.botaoMais, abrirApp)
+        rv.setViewVisibility(R.id.vazio, if (tarefas.isEmpty()) View.VISIBLE else View.GONE)
+        preencher(rv, LINHAS_WIDGET, tarefas, agora, fundoEscuro = true)
+        mgr.updateAppWidget(ids, rv)
+    }
+
+    /** Preenche N linhas + o texto "+X tarefas" (id R.id.mais) num RemoteViews. */
+    fun preencher(rv: RemoteViews, linhas: List<IdsLinha>, tarefas: List<Tarefa>, agora: Long, fundoEscuro: Boolean) {
+        val extras = tarefas.size - linhas.size
+        if (extras > 0) {
+            rv.setTextViewText(R.id.mais, "+$extras tarefa${if (extras > 1) "s" else ""}")
+            rv.setViewVisibility(R.id.mais, View.VISIBLE)
+        } else rv.setViewVisibility(R.id.mais, View.GONE)
+
+        linhas.forEachIndexed { i, ids ->
+            val t = tarefas.getOrNull(i)
+            if (t == null) rv.setViewVisibility(ids.linha, View.GONE)
+            else { rv.setViewVisibility(ids.linha, View.VISIBLE); preencherLinha(rv, ids, t, agora, fundoEscuro) }
         }
+    }
 
-        private fun montar(c: Context, tarefas: List<Tarefa>, agora: Long): RemoteViews {
-            val rv = RemoteViews(c.packageName, R.layout.widget_prazo)
-
-            val abrirApp = PendingIntent.getActivity(
-                c, 1, Intent(c, MainActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            rv.setOnClickPendingIntent(R.id.raiz, abrirApp)
-            rv.setOnClickPendingIntent(R.id.botaoMais, abrirApp)
-
-            rv.setViewVisibility(R.id.vazio, if (tarefas.isEmpty()) View.VISIBLE else View.GONE)
-            val extras = tarefas.size - LINHAS.size
-            if (extras > 0) {
-                rv.setTextViewText(R.id.mais, "+$extras tarefa${if (extras > 1) "s" else ""}")
-                rv.setViewVisibility(R.id.mais, View.VISIBLE)
-            } else rv.setViewVisibility(R.id.mais, View.GONE)
-
-            for (i in LINHAS.indices) {
-                val t = tarefas.getOrNull(i)
-                if (t == null) { rv.setViewVisibility(LINHAS[i], View.GONE); continue }
-                rv.setViewVisibility(LINHAS[i], View.VISIBLE)
-                rv.setTextViewText(NOMES[i], t.titulo)
-
-                val restante = t.prazo - agora
-                when {
-                    t.status == Status.AGUARDANDO || restante <= 0 -> {
-                        cor(rv, i, COR_RESPONDER)
-                        mostrarInfo(rv, i, "Responder", COR_RESPONDER)
-                    }
-                    restante > UM_DIA -> {
-                        cor(rv, i, COR_NEUTRA)
-                        val dias = restante / UM_DIA
-                        mostrarInfo(rv, i, "em $dias dia${if (dias > 1) "s" else ""}", COR_NEUTRA)
-                    }
-                    else -> {
-                        val corFaixa = if (restante > UMA_HORA) COR_ATENCAO else COR_CRITICA
-                        cor(rv, i, corFaixa)
-                        // Converte o prazo (relógio de parede) para a base do Chronometer
-                        val base = SystemClock.elapsedRealtime() + restante
-                        rv.setChronometer(CRONOS[i], base, null, true)
-                        rv.setChronometerCountDown(CRONOS[i], true)
-                        rv.setTextColor(CRONOS[i], if (restante > UMA_HORA) COR_TEXTO else COR_CRITICA)
-                        rv.setViewVisibility(CRONOS[i], View.VISIBLE)
-                        rv.setViewVisibility(INFOS[i], View.GONE)
-                    }
-                }
+    fun preencherLinha(rv: RemoteViews, ids: IdsLinha, t: Tarefa, agora: Long, fundoEscuro: Boolean) {
+        rv.setTextViewText(ids.nome, t.titulo)
+        val restante = t.prazo - agora
+        when {
+            t.status == Status.AGUARDANDO || restante <= 0 -> {
+                barra(rv, ids, COR_RESPONDER)
+                info(rv, ids, "Responder", if (fundoEscuro) COR_RESPONDER else COR_RESPONDER_ESCURA)
             }
-            return rv
+            restante > UM_DIA -> {
+                barra(rv, ids, COR_NEUTRA)
+                info(rv, ids, Store.amigavel(t.prazo), COR_NEUTRA)
+            }
+            else -> {
+                barra(rv, ids, if (restante > UMA_HORA) COR_ATENCAO else COR_CRITICA)
+                // Converte o prazo (relógio de parede) para a base do Chronometer
+                rv.setChronometer(ids.crono, SystemClock.elapsedRealtime() + restante, null, true)
+                rv.setChronometerCountDown(ids.crono, true)
+                when {
+                    restante <= UMA_HORA -> rv.setTextColor(ids.crono, COR_CRITICA)
+                    fundoEscuro -> rv.setTextColor(ids.crono, COR_BRANCA)
+                    // fundo do sistema (notificação): mantém a cor padrão do tema
+                }
+                rv.setViewVisibility(ids.crono, View.VISIBLE)
+                rv.setViewVisibility(ids.info, View.GONE)
+            }
         }
+    }
 
-        private fun cor(rv: RemoteViews, i: Int, cor: Int) =
-            rv.setInt(BARRAS[i], "setBackgroundColor", cor)
+    private fun barra(rv: RemoteViews, ids: IdsLinha, cor: Int) =
+        rv.setInt(ids.barra, "setBackgroundColor", cor)
 
-        private fun mostrarInfo(rv: RemoteViews, i: Int, texto: String, cor: Int) {
-            rv.setChronometer(CRONOS[i], SystemClock.elapsedRealtime(), null, false)
-            rv.setViewVisibility(CRONOS[i], View.GONE)
-            rv.setTextViewText(INFOS[i], texto)
-            rv.setTextColor(INFOS[i], cor)
-            rv.setViewVisibility(INFOS[i], View.VISIBLE)
-        }
+    private fun info(rv: RemoteViews, ids: IdsLinha, texto: String, cor: Int) {
+        rv.setChronometer(ids.crono, SystemClock.elapsedRealtime(), null, false)
+        rv.setViewVisibility(ids.crono, View.GONE)
+        rv.setTextViewText(ids.info, texto)
+        rv.setTextColor(ids.info, cor)
+        rv.setViewVisibility(ids.info, View.VISIBLE)
     }
 }

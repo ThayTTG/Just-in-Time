@@ -11,8 +11,20 @@ android {
         applicationId = "com.nokylabs.justintime.prototipo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.0.1-prototipo"
+        versionCode = 2
+        versionName = "0.0.2-prototipo"
+    }
+
+    // Chave de depuração fixa, guardada no projeto: assim qualquer computador gera
+    // APKs com a mesma assinatura e o celular atualiza sem precisar desinstalar.
+    // (Só para o protótipo! O app de verdade terá uma keystore própria, fora do Git.)
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("prototipo-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {

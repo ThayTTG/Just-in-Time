@@ -1,6 +1,9 @@
 package com.nokylabs.justintime.prototipo
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -13,17 +16,18 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
-import android.text.InputType
 import android.view.Gravity
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import java.util.Calendar
 
 /**
- * Tela única do protótipo: permissões, criar tarefa de teste, lista de tarefas e log.
+ * Tela única do protótipo.
  * (A interface é montada em código para o protótipo ficar curto; no app final será Compose.)
  */
 class MainActivity : Activity() {
@@ -33,8 +37,16 @@ class MainActivity : Activity() {
     private lateinit var caixaTarefas: LinearLayout
     private lateinit var textoLog: TextView
     private lateinit var campoNome: EditText
-    private lateinit var campoMinutos: EditText
+    private lateinit var botaoData: Button
+    private lateinit var botaoHora: Button
     private val dp by lazy { resources.displayMetrics.density }
+    private var dialogoErroAberto = false
+
+    /** Data e hora escolhidas para o prazo. Começa na próxima hora cheia. */
+    private val prazoEscolhido: Calendar = Calendar.getInstance().apply {
+        add(Calendar.HOUR_OF_DAY, 1)
+        set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }
 
     private val relogio = object : Runnable {
         override fun run() {
@@ -46,7 +58,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Notificador.criarCanais(this)
-        Agendador.reagendarTudo(this, "app aberto")
+        Relatorio.proteger(this, "Reagendar ao abrir") { Agendador.reagendarTudo(this, "app aberto") }
         montarTela()
     }
 
@@ -55,6 +67,7 @@ class MainActivity : Activity() {
         atualizarPermissoes()
         atualizarLog()
         handler.post(relogio)
+        oferecerRelatorioSeHouverErros()
     }
 
     override fun onPause() {
@@ -80,46 +93,71 @@ class MainActivity : Activity() {
         text = s; isAllCaps = false; setOnClickListener { aoClicar() }
     }
 
+    private fun linhaDeBotoes(vararg botoes: Button) = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        botoes.forEach { addView(it, LinearLayout.LayoutParams(0, -2, 1f)) }
+    }
+
     private fun montarTela() {
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(px(18), px(8), px(18), px(32))
         }
 
-        col.addView(texto("Protótipo de risco: alarme exato, tela de alarme no bloqueio, " +
-            "notificação com respostas e widget com contagem regressiva.", 13f))
-
-        col.addView(titulo("1. Permissões"))
-        caixaPermissoes = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(caixaPermissoes)
-
-        col.addView(titulo("2. Nova tarefa de teste"))
-        campoNome = EditText(this).apply { hint = "Nome da tarefa"; setText("Tarefa de teste") }
+        col.addView(titulo("1. Nova tarefa"))
+        campoNome = EditText(this).apply { hint = "O que precisa ser feito?" }
         col.addView(campoNome)
-        campoMinutos = EditText(this).apply {
-            hint = "Prazo daqui a quantos minutos?"
-            inputType = InputType.TYPE_CLASS_NUMBER
-            setText("2")
-        }
-        col.addView(campoMinutos)
-        val linhaBotoes = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        linhaBotoes.addView(botao("Agendar") {
-            val min = campoMinutos.text.toString().toLongOrNull() ?: 0
-            if (min <= 0) toast("Digite os minutos") else criarTarefa(min * 60_000L)
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        linhaBotoes.addView(botao("Em 30 s") { criarTarefa(30_000L) }, LinearLayout.LayoutParams(0, -2, 1f))
-        col.addView(linhaBotoes)
+        col.addView(texto("Prazo de entrega", 12f, "#8E89AD").apply { setPadding(0, px(10), 0, 0) })
+        botaoData = botao("") { escolherData() }
+        botaoHora = botao("") { escolherHora() }
+        col.addView(linhaDeBotoes(botaoData, botaoHora))
+        atualizarBotoesPrazo()
+        col.addView(botao("Agendar tarefa") { agendarEscolhida() })
 
-        col.addView(titulo("3. Tarefas"))
+        col.addView(titulo("2. Tarefas"))
         caixaTarefas = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(caixaTarefas)
 
-        col.addView(titulo("4. Log de diagnóstico"))
-        col.addView(texto("O atraso de cada alarme aparece aqui. Use \"Copiar log\" e cole na conversa com o Claude.", 12f))
-        val linhaLog = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        linhaLog.addView(botao("Copiar log") { copiarLog() }, LinearLayout.LayoutParams(0, -2, 1f))
-        linhaLog.addView(botao("Limpar log") { Store.limparLog(this); atualizarLog() }, LinearLayout.LayoutParams(0, -2, 1f))
-        col.addView(linhaLog)
+        col.addView(titulo("3. Permissões"))
+        caixaPermissoes = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(caixaPermissoes)
+
+        col.addView(titulo("4. Preferências"))
+        col.addView(CheckBox(this).apply {
+            text = "Resumo nas notificações (contagem das próximas tarefas)"
+            isChecked = Store.resumoAtivo(this@MainActivity)
+            setOnCheckedChangeListener { _, v -> Store.definirResumo(this@MainActivity, v); Vitrine.atualizarTudo(this@MainActivity) }
+        })
+        col.addView(CheckBox(this).apply {
+            text = "Bolha flutuante com a próxima tarefa"
+            isChecked = Store.bolhaAtiva(this@MainActivity)
+            setOnCheckedChangeListener { _, v ->
+                Store.definirBolha(this@MainActivity, v)
+                if (v && !Settings.canDrawOverlays(this@MainActivity)) toast("Libere \"Aparecer sobre outros apps\" em Permissões")
+                Vitrine.atualizarTudo(this@MainActivity)
+            }
+        })
+        col.addView(botao("Mostrar a bolha de novo") {
+            Store.fecharBolhaPara(this, -1); Vitrine.atualizarTudo(this)
+        })
+
+        col.addView(titulo("5. Diagnóstico"))
+        col.addView(texto("Ferramentas de teste. \"Copiar log\" copia tudo para colar na conversa com o Claude.", 12f))
+        col.addView(linhaDeBotoes(
+            botao("Alarme em 30 s") { criarTarefa(nomeOuPadrao("Teste rápido"), System.currentTimeMillis() + 30_000L) },
+            botao("Simular falha") { throw RuntimeException("Falha simulada pelo botão de teste") },
+        ))
+        col.addView(linhaDeBotoes(
+            botao("Erro em 2º plano") {
+                sendBroadcast(Intent(this, AlarmReceiver::class.java).setAction(AlarmReceiver.ACAO_SIMULAR_ERRO))
+                toast("Erro simulado: deve chegar uma notificação")
+            },
+            botao("Reportar bug") { startActivity(Relatorio.intentCompartilhar(this)) },
+        ))
+        col.addView(linhaDeBotoes(
+            botao("Copiar log") { copiarLog() },
+            botao("Limpar log") { Store.limparLog(this); atualizarLog() },
+        ))
         textoLog = texto("", 12f, "#2B2840").apply {
             typeface = Typeface.MONOSPACE
             setTextIsSelectable(true)
@@ -129,6 +167,48 @@ class MainActivity : Activity() {
         col.addView(textoLog)
 
         setContentView(ScrollView(this).apply { addView(col) })
+    }
+
+    // ---------------- Data e hora do prazo ----------------
+
+    private fun atualizarBotoesPrazo() {
+        botaoData.text = "📅 " + Store.data(prazoEscolhido.timeInMillis)
+        botaoHora.text = "🕒 " + Store.soHora(prazoEscolhido.timeInMillis)
+    }
+
+    private fun escolherData() {
+        DatePickerDialog(this, { _, ano, mes, dia ->
+            prazoEscolhido.set(ano, mes, dia); atualizarBotoesPrazo()
+        }, prazoEscolhido.get(Calendar.YEAR), prazoEscolhido.get(Calendar.MONTH), prazoEscolhido.get(Calendar.DAY_OF_MONTH)
+        ).apply { datePicker.minDate = System.currentTimeMillis() - 1000 }.show()
+    }
+
+    private fun escolherHora() {
+        TimePickerDialog(this, { _, hora, minuto ->
+            prazoEscolhido.set(Calendar.HOUR_OF_DAY, hora); prazoEscolhido.set(Calendar.MINUTE, minuto)
+            prazoEscolhido.set(Calendar.SECOND, 0); prazoEscolhido.set(Calendar.MILLISECOND, 0)
+            atualizarBotoesPrazo()
+        }, prazoEscolhido.get(Calendar.HOUR_OF_DAY), prazoEscolhido.get(Calendar.MINUTE), true).show()
+    }
+
+    private fun nomeOuPadrao(padrao: String) = campoNome.text.toString().trim().ifEmpty { padrao }
+
+    private fun agendarEscolhida() {
+        val nome = campoNome.text.toString().trim()
+        if (nome.isEmpty()) { toast("Dê um nome para a tarefa"); return }
+        val prazo = prazoEscolhido.timeInMillis
+        if (prazo <= System.currentTimeMillis()) { toast("Esse horário já passou. Escolha outro."); return }
+        criarTarefa(nome, prazo)
+        campoNome.setText("")
+    }
+
+    private fun criarTarefa(nome: String, prazo: Long) {
+        val t = Tarefa(id = Store.novoId(this), titulo = nome, prazo = prazo)
+        Store.salvar(this, t)
+        Agendador.agendarPrazo(this, t)
+        Vitrine.atualizarTudo(this)
+        toast("Agendada para ${Store.amigavel(prazo)}")
+        atualizarTarefas(); atualizarLog()
     }
 
     // ---------------- Permissões ----------------
@@ -150,38 +230,31 @@ class MainActivity : Activity() {
     private fun atualizarPermissoes() {
         caixaPermissoes.removeAllViews()
 
-        linhaPermissao(
-            "Notificações", Notificador.podeNotificar(this),
-            "Sem isso o alarme não aparece nem toca."
-        ) {
+        linhaPermissao("Notificações", Notificador.podeNotificar(this), "Sem isso o alarme não aparece nem toca.") {
             if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 1)
             else abrir(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
         }
-
-        linhaPermissao(
-            "Alarmes exatos", Agendador.podeAgendarExato(this),
-            "Para tocar no segundo certo, mesmo com o celular em repouso."
-        ) {
+        linhaPermissao("Alarmes exatos", Agendador.podeAgendarExato(this), "Para tocar no segundo certo, mesmo em repouso.") {
             if (Build.VERSION.SDK_INT >= 31) abrir(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
         }
-
-        linhaPermissao(
-            "Tela cheia no bloqueio", Notificador.podeTelaCheia(this),
-            "Para a tela de alarme acender o celular bloqueado."
-        ) {
+        linhaPermissao("Tela cheia no bloqueio", Notificador.podeTelaCheia(this), "Para a tela de alarme acender o celular bloqueado.") {
             if (Build.VERSION.SDK_INT >= 34) abrir(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:$packageName")))
         }
-
-        val pm = getSystemService(PowerManager::class.java)
         linhaPermissao(
-            "Bateria sem restrição", pm.isIgnoringBatteryOptimizations(packageName),
-            "Evita que o sistema encerre o app em segundo plano."
+            "Aparecer sobre outros apps", Settings.canDrawOverlays(this),
+            "Para a tela de alarme abrir com o celular em uso e para a bolha flutuante."
         ) {
+            abrir(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        }
+        val pm = getSystemService(PowerManager::class.java)
+        linhaPermissao("Bateria sem restrição", pm.isIgnoringBatteryOptimizations(packageName), "Evita que o sistema encerre o app em segundo plano.") {
             abrir(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
         }
-
-        texto("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}", 12f, "#8E89AD")
-            .also { caixaPermissoes.addView(it) }
+        caixaPermissoes.addView(
+            texto("Versão ${Relatorio.versao(this)} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}", 12f, "#8E89AD")
+        )
+        // Ao voltar das configurações, a bolha pode ter ficado disponível
+        Vitrine.atualizarTudo(this)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -198,28 +271,22 @@ class MainActivity : Activity() {
 
     // ---------------- Tarefas ----------------
 
-    private fun criarTarefa(daquiMs: Long) {
-        val nome = campoNome.text.toString().trim().ifEmpty { "Tarefa de teste" }
-        val t = Tarefa(id = Store.novoId(this), titulo = nome, prazo = System.currentTimeMillis() + daquiMs)
-        Store.salvar(this, t)
-        Agendador.agendarPrazo(this, t)
-        DeadlineWidget.atualizarTodos(this)
-        toast("Agendada para ${Store.hora(t.prazo)}")
-        atualizarTarefas(); atualizarLog()
-    }
-
     private fun restanteTexto(ms: Long): String {
         if (ms <= 0) return "venceu"
         val s = ms / 1000
-        val h = s / 3600; val m = (s % 3600) / 60; val seg = s % 60
-        return if (h > 0) "%d:%02d:%02d".format(h, m, seg) else "%02d:%02d".format(m, seg)
+        val d = s / 86400; val h = (s % 86400) / 3600; val m = (s % 3600) / 60; val seg = s % 60
+        return when {
+            d > 0 -> "${d}d ${h}h"
+            h > 0 -> "%d:%02d:%02d".format(h, m, seg)
+            else -> "%02d:%02d".format(m, seg)
+        }
     }
 
     private fun atualizarTarefas() {
         caixaTarefas.removeAllViews()
-        val todas = Store.tarefas(this).sortedByDescending { it.id }
+        val todas = Store.tarefas(this).sortedWith(compareBy<Tarefa>({ if (it.aberta) 0 else 1 }, { it.prazo }))
         if (todas.isEmpty()) {
-            caixaTarefas.addView(texto("Nenhuma tarefa ainda. Agende uma acima.", 13f)); return
+            caixaTarefas.addView(texto("Nenhuma tarefa ainda. Crie uma acima.", 13f)); return
         }
         val agora = System.currentTimeMillis()
         for (t in todas) {
@@ -229,9 +296,9 @@ class MainActivity : Activity() {
                 setPadding(0, px(4), 0, px(4))
             }
             val textos = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            textos.addView(texto(t.titulo, 15f, "#1E1B2E"))
+            textos.addView(texto(t.titulo, 15f, if (t.aberta) "#1E1B2E" else "#8E89AD"))
             val detalhe = buildString {
-                append(Status.rotulo(t.status)).append(" · prazo ").append(Store.hora(t.prazo))
+                append(Status.rotulo(t.status)).append(" · ").append(Store.amigavel(t.prazo))
                 if (t.status == Status.ATIVA) append(" · faltam ").append(restanteTexto(t.prazo - agora))
                 if (t.adiamentos > 0) append(" · adiada ${t.adiamentos}x")
             }
@@ -247,13 +314,36 @@ class MainActivity : Activity() {
                 Notificador.cancelar(this, t.id)
                 Store.remover(this, t.id)
                 Store.log(this, "Excluída: \"${t.titulo}\"")
-                DeadlineWidget.atualizarTodos(this)
+                Vitrine.atualizarTudo(this)
                 atualizarTarefas(); atualizarLog()
             })
             caixaTarefas.addView(linha)
         }
-        // Atualiza o log junto, para ver os disparos chegando com o app aberto
         atualizarLog()
+    }
+
+    // ---------------- Relatório de bugs ----------------
+
+    private fun oferecerRelatorioSeHouverErros() {
+        val erros = Store.errosPendentes(this)
+        if (erros.isEmpty() || dialogoErroAberto) return
+        dialogoErroAberto = true
+        AlertDialog.Builder(this)
+            .setTitle("Ops, algo deu errado 😕")
+            .setMessage(
+                "O app registrou ${erros.size} erro${if (erros.size > 1) "s" else ""}. " +
+                    "Quer enviar um relatório? Ele leva o modelo do celular, a versão do app, o erro " +
+                    "e as últimas linhas do log (que incluem os nomes das tarefas)."
+            )
+            .setPositiveButton("Reportar bug") { _, _ ->
+                startActivity(Relatorio.intentCompartilhar(this)); Store.limparErros(this)
+            }
+            .setNeutralButton("Copiar") { _, _ ->
+                copiar(Relatorio.montarTexto(this)); Store.limparErros(this)
+            }
+            .setNegativeButton("Descartar") { _, _ -> Store.limparErros(this) }
+            .setOnDismissListener { dialogoErroAberto = false }
+            .show()
     }
 
     // ---------------- Log ----------------
@@ -261,15 +351,18 @@ class MainActivity : Activity() {
     private fun atualizarLog() {
         val linhas = Store.logs(this)
         val novo = if (linhas.isEmpty()) "(vazio)" else linhas.take(60).joinToString("\n")
-        if (textoLog.text.toString() != novo) textoLog.text = novo // não atrapalha seleção à toa
+        if (textoLog.text.toString() != novo) textoLog.text = novo // não atrapalha a seleção à toa
     }
 
     private fun copiarLog() {
-        val cabecalho = "Just in Time protótipo · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · " +
+        val cabecalho = "Just in Time ${Relatorio.versao(this)} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · " +
             "${Build.MANUFACTURER} ${Build.MODEL}\n"
-        val cm = getSystemService(ClipboardManager::class.java)
-        cm.setPrimaryClip(ClipData.newPlainText("log", cabecalho + Store.logs(this).joinToString("\n")))
-        toast("Log copiado")
+        copiar(cabecalho + Store.logs(this).joinToString("\n"))
+    }
+
+    private fun copiar(texto: String) {
+        getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Just in Time", texto))
+        toast("Copiado")
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()

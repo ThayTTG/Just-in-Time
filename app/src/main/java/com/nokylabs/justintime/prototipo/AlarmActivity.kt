@@ -71,7 +71,7 @@ class AlarmActivity : Activity() {
         }
         raiz.addView(texto("O prazo chegou", 18f, "#B9B4D6"))
         raiz.addView(texto(t.titulo, 30f, "#FFFFFF", negrito = true))
-        raiz.addView(texto("Prazo: ${Store.hora(t.prazo)}", 16f, "#B9B4D6"))
+        raiz.addView(texto("Prazo: ${Store.amigavel(t.prazo)}", 16f, "#B9B4D6"))
         if (t.disparouEm > 0) {
             val atraso = (t.disparouEm - t.prazo) / 1000.0
             raiz.addView(texto("Atraso do alarme: ${"%.1f".format(atraso)} s", 14f, "#8E89AD"))

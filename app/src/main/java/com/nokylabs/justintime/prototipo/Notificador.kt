@@ -10,11 +10,63 @@ import android.graphics.drawable.Icon
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
+import android.widget.RemoteViews
 
 object Notificador {
 
     const val CANAL_ALARME = "alarmes"
     const val CANAL_SILENCIOSO = "silencioso"
+    const val CANAL_RESUMO = "resumo"
+    const val ID_RESUMO = 1_000_000
+
+    private val LINHAS_RESUMO_RECOLHIDO = listOf(
+        IdsLinha(R.id.linha1, R.id.barra1, R.id.nome1, R.id.crono1, R.id.info1),
+    )
+    private val LINHAS_RESUMO_EXPANDIDO = listOf(
+        IdsLinha(R.id.linha1, R.id.barra1, R.id.nome1, R.id.crono1, R.id.info1),
+        IdsLinha(R.id.linha2, R.id.barra2, R.id.nome2, R.id.crono2, R.id.info2),
+    )
+
+    /**
+     * Notificação fixa e silenciosa que espelha o widget:
+     * recolhida mostra a próxima tarefa; expandida mostra até 2 + "+N tarefas".
+     */
+    fun construirResumo(c: Context, tarefas: List<Tarefa>, agora: Long): Notification {
+        val recolhida = RemoteViews(c.packageName, R.layout.notif_resumo_recolhida)
+        Vitrine.preencher(recolhida, LINHAS_RESUMO_RECOLHIDO, tarefas, agora, fundoEscuro = false)
+        // Na versão recolhida, "+N" conta todas as outras tarefas
+        val outras = tarefas.size - 1
+        if (outras > 0) {
+            recolhida.setTextViewText(R.id.mais, "+$outras")
+            recolhida.setViewVisibility(R.id.mais, android.view.View.VISIBLE)
+        }
+
+        val expandida = RemoteViews(c.packageName, R.layout.notif_resumo_expandida)
+        Vitrine.preencher(expandida, LINHAS_RESUMO_EXPANDIDO, tarefas, agora, fundoEscuro = false)
+
+        val abrirApp = PendingIntent.getActivity(
+            c, 2, Intent(c, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        return Notification.Builder(c, CANAL_RESUMO)
+            .setSmallIcon(R.drawable.ic_stat_alarme)
+            .setStyle(Notification.DecoratedCustomViewStyle())
+            .setCustomContentView(recolhida)
+            .setCustomBigContentView(expandida)
+            .setContentIntent(abrirApp)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setCategory(Notification.CATEGORY_STATUS)
+            .build()
+    }
+
+    fun atualizarResumo(c: Context, tarefas: List<Tarefa>, agora: Long) {
+        val mostrar = tarefas.isNotEmpty() && (Store.resumoAtivo(c) || BolhaService.rodando)
+        if (mostrar) nm(c).notify(ID_RESUMO, construirResumo(c, tarefas, agora))
+        else if (!BolhaService.rodando) nm(c).cancel(ID_RESUMO)
+    }
 
     const val ACAO_FEITO = "jit.FEITO"
     const val ACAO_NAO_FEITO = "jit.NAO_FEITO"
@@ -51,7 +103,15 @@ object Notificador {
             setSound(null, null)
             enableVibration(false)
         }
-        nm(c).createNotificationChannels(listOf(alarme, silencioso))
+        val resumo = NotificationChannel(
+            CANAL_RESUMO, "Resumo das tarefas", NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Notificação fixa com a contagem regressiva das próximas tarefas"
+            setSound(null, null)
+            enableVibration(false)
+            setShowBadge(false)
+        }
+        nm(c).createNotificationChannels(listOf(alarme, silencioso, resumo))
     }
 
     fun podeTelaCheia(c: Context): Boolean =
@@ -85,7 +145,7 @@ object Notificador {
         val b = Notification.Builder(c, canal)
             .setSmallIcon(R.drawable.ic_stat_alarme)
             .setContentTitle(t.titulo)
-            .setContentText("O prazo chegou (${Store.hora(t.prazo)}). Você fez?")
+            .setContentText("O prazo chegou (${Store.amigavel(t.prazo)}). Você fez?")
             .setCategory(Notification.CATEGORY_ALARM)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOngoing(true)
