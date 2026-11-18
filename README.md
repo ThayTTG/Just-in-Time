@@ -2,7 +2,7 @@
 
 App de tarefas com prazo da **NokyLabs**: você coloca o que precisa ser feito e quando, e o app mostra o tempo passando. Quando o prazo chega, ele toca e pergunta se a tarefa foi feita.
 
-Android primeiro; Windows e Linux depois, com o mesmo código de regras e telas (Kotlin Multiplatform + Compose).
+Android agora (Kotlin Multiplatform + Compose); no PC, esse papel fica com o PlaningThings.
 
 | Lista | Editar | Ajustar | Alarme | Configurações |
 |---|---|---|---|---|
